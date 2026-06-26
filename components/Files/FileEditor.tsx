@@ -3,10 +3,35 @@ import Editor, { useMonaco } from '@monaco-editor/react';
 import type { editor as MonacoEditor } from 'monaco-editor';
 import {
   X, Save, RefreshCw, Loader2, AlertTriangle, ChevronDown,
-  FileCode2, Check, WrapText, AlignLeft, Maximize2, Minimize2,
+  FileCode2, Check, WrapText, AlignLeft, Maximize2, Minimize2, Download,
 } from 'lucide-react';
 import * as api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
+
+// ─── Binary file types that can't be meaningfully edited ─────────────────────
+const BINARY_EXTS = new Set([
+  // Images
+  'png','jpg','jpeg','gif','bmp','webp','ico','tiff','tif','svg','avif','heic','heif',
+  // Video
+  'mp4','mkv','avi','mov','wmv','flv','webm','m4v','mpg','mpeg','3gp',
+  // Audio
+  'mp3','wav','ogg','flac','aac','m4a','wma','opus',
+  // Archives
+  'zip','tar','gz','bz2','xz','7z','rar','zst','lz4',
+  // Executables / compiled
+  'exe','dll','so','dylib','bin','elf','o','a','lib','apk','deb','rpm',
+  // Documents (binary)
+  'pdf','doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp',
+  // Fonts
+  'ttf','otf','woff','woff2','eot',
+  // Database / compiled data
+  'db','sqlite','sqlite3','pyc','pyo','class','jar',
+]);
+
+function isBinaryFile(filename: string): boolean {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return BINARY_EXTS.has(ext);
+}
 
 // ─── Language detection from filename ────────────────────────────────────────
 function detectLanguage(filename: string): string {
@@ -64,8 +89,9 @@ export const FileEditor: React.FC<Props> = ({ filePath, onClose }) => {
   const monaco = useMonaco();
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
 
-  const filename = filePath.split('/').pop() ?? filePath;
+  const filename = filePath.split('/').pop() ?? filePath.split('\\').pop() ?? filePath;
   const language = detectLanguage(filename);
+  const isBinary = isBinaryFile(filename);
 
   const [content, setContent]       = useState('');
   const [original, setOriginal]     = useState('');
@@ -84,6 +110,11 @@ export const FileEditor: React.FC<Props> = ({ filePath, onClose }) => {
 
   // Load file content
   useEffect(() => {
+    // Skip loading binary files — show info screen directly
+    if (isBinary) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError('');
     api.readFileContent(filePath)
@@ -94,7 +125,7 @@ export const FileEditor: React.FC<Props> = ({ filePath, onClose }) => {
       })
       .catch(e => setLoadError(e.message))
       .finally(() => setLoading(false));
-  }, [filePath]);
+  }, [filePath, isBinary]);
 
   // Configure Monaco fonts & theme on mount
   useEffect(() => {
@@ -268,7 +299,24 @@ export const FileEditor: React.FC<Props> = ({ filePath, onClose }) => {
 
       {/* ── Editor area ── */}
       <div className="flex-1 min-h-0 relative">
-        {loading ? (
+        {isBinary ? (
+          /* Binary file — can't be edited as text */
+          <div className="absolute inset-0 bg-[#1E1E1E] flex flex-col items-center justify-center gap-4 p-8">
+            <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
+              <FileCode2 size={32} className="text-[#75BEFF]" />
+            </div>
+            <div className="text-center">
+              <p className="text-[#D4D4D4] text-[14px] font-semibold mb-1">{filename}</p>
+              <p className="text-[#858585] text-[12px]">This file is a binary and cannot be edited as text.</p>
+            </div>
+            <button
+              onClick={() => api.downloadFileBlob(filePath, filename).catch(() => {})}
+              className="flex items-center gap-2 px-4 py-2 bg-[#0E639C] hover:bg-[#1177BB] text-white text-[13px] rounded-lg transition-colors"
+            >
+              <Download size={14} /> Download File
+            </button>
+          </div>
+        ) : loading ? (
           <div className="absolute inset-0 bg-[#1E1E1E] flex flex-col items-center justify-center gap-3">
             <Loader2 size={28} className="animate-spin text-[#007ACC]" />
             <span className="text-[#CCCCCC] text-[13px]" style={{ fontFamily: 'inherit' }}>Loading {filename}…</span>

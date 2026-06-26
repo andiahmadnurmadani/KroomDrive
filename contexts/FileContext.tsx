@@ -31,6 +31,11 @@ interface FileContextType {
   
   // Selection State
   selectedPaths: string[];
+
+  // Editor State
+  editingPath: string | null;
+  openEditor: (path: string) => void;
+  closeEditor: () => void;
   
   setCurrentPath: (path: string) => void;
   setViewMode: (mode: ViewMode) => void;
@@ -68,6 +73,9 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [clipboard, setClipboard] = useState<ClipboardItem | null>(null);
   const [progress, setProgress] = useState<ProgressState | null>(null);
   
+  // Editor State
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+
   // Selection State
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const lastSelectedPath = useRef<string | null>(null);
@@ -93,6 +101,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProgress(null);
       setSelectedPaths([]);
       setError(null);
+      setEditingPath(null);
       lastSelectedPath.current = null;
       activeJobId.current = null;
     }
@@ -427,6 +436,9 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
       progress,
       activeJobId,
       selectedPaths,
+      editingPath,
+      openEditor: (path: string) => setEditingPath(path),
+      closeEditor: () => setEditingPath(null),
       setCurrentPath,
       setViewMode,
       setSearchQuery,

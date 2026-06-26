@@ -3,7 +3,7 @@ import React, { useRef, useEffect } from 'react';
 import { 
   Download, Copy, Scissors, Edit2, Trash2, Info, 
   ExternalLink, FolderPlus, ClipboardCheck, CheckCircle2,
-  FileArchive, Link, GitBranch
+  FileArchive, Link, GitBranch, FileCode2
 } from 'lucide-react';
 import { FileItem } from '../../types';
 import { useFile } from '../../contexts/FileContext';
@@ -47,7 +47,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     onOpenGit,
     isGitRepo,
 }) => {
-    const { clipboard, refreshFiles, currentPath, extractFile, selectedPaths } = useFile();
+    const { clipboard, refreshFiles, currentPath, extractFile, selectedPaths, openEditor } = useFile();
     const { showToast, handleError } = useToast();
     const contextMenuRef = useRef<HTMLDivElement>(null);
 
@@ -104,11 +104,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                         </button>
                       ) : (
                         <>
-                            <button 
-                            onClick={() => handleDownload(contextMenu.item!)}
-                            className="w-full text-left px-3 py-2 hover:bg-primary-50 hover:text-primary-700 flex items-center gap-2 transition-colors"
+                            {/* Open in Editor — available for ALL files */}
+                            <button
+                                onClick={() => { openEditor(contextMenu.item!.path); onClose(); }}
+                                className="w-full text-left px-3 py-2 hover:bg-primary-50 hover:text-primary-700 flex items-center gap-2 transition-colors font-medium"
                             >
-                            <Download size={16} /> Download
+                                <FileCode2 size={16} className="text-primary-500" /> Open in Editor
+                            </button>
+                            <button 
+                                onClick={() => handleDownload(contextMenu.item!)}
+                                className="w-full text-left px-3 py-2 hover:bg-primary-50 hover:text-primary-700 flex items-center gap-2 transition-colors"
+                            >
+                                <Download size={16} /> Download
                             </button>
                             {isZip && (
                                 <button 
