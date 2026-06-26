@@ -28,7 +28,9 @@ KroomDrive is a **self-hosted file manager** that lets you browse, upload, and m
 <div align="center">
 <br/>
 
-> 📸 Screenshots coming soon
+![KroomDrive Dashboard](./public/screenshot-dashboard.png)
+
+*KroomDrive Dashboard - File management interface with SSH/SFTP connectivity*
 
 <br/>
 
