@@ -62,10 +62,13 @@ function getPermForPath(user, inputPath) {
 }
 
 // ─── Safe git exec: always runs inside the repo directory ────────────────────
+// IMPORTANT: gitArgs must NOT contain shell metacharacters (|, ;, &, >, <, `, $).
+// If you need to combine commands, do it in JavaScript by calling gitExec multiple
+// times and joining results — don't try to embed pipes/redirects in gitArgs.
 async function gitExec(serverId, remotePath, gitArgs) {
   // Sanitize: prevent shell injection in args
   const safeArgs = gitArgs.replace(/[`$;|&<>]/g, '');
-  // Use printf to cd safely — avoids zsh "too many arguments" on paths with spaces
+  // Always wrap output in 2>&1 so we capture stderr too
   const cmd = `cd -- "${remotePath}" && git ${safeArgs} 2>&1`;
   return execCommand(serverId, cmd);
 }
@@ -471,11 +474,16 @@ router.get('/diff', async (req, res) => {
 
   try {
     const { serverId, remotePath } = resolvePath(req.user, inputPath);
-    const safeFile = file ? `"${String(file).replace(/"/g, '')}"` : '';
-    // Show both staged and unstaged diffs
-    const output = await gitExec(serverId, remotePath,
-      `diff HEAD ${safeFile} 2>/dev/null || diff ${safeFile}`
-    );
+    // Sanitize file path — strip shell-meaningful chars
+    const safeFile = file ? `"${String(file).replace(/[`$;|&<>"]/g, '')}"` : '';
+
+    // Try diff vs HEAD first (shows staged + unstaged) — fall back to plain diff if no HEAD
+    let output = '';
+    try {
+      output = await gitExec(serverId, remotePath, `diff HEAD ${safeFile}`);
+    } catch (_) {
+      output = await gitExec(serverId, remotePath, `diff ${safeFile}`).catch(() => '');
+    }
     res.json({ output: output || '(no diff)' });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -550,10 +558,11 @@ router.get('/tags', async (req, res) => {
 
   try {
     const { serverId, remotePath } = resolvePath(req.user, inputPath);
+    // Get all tags — slice in JS to avoid pipes in shell (sanitizer strips |)
     const output = await gitExec(serverId, remotePath,
-      'tag --sort=-creatordate --format="%(refname:short)|%(creatordate:short)|%(subject)" 2>/dev/null | head -30'
+      'tag --sort=-creatordate --format="%(refname:short)|%(creatordate:short)|%(subject)"'
     );
-    const tags = output.split('\n').filter(Boolean).map(line => {
+    const tags = output.split('\n').filter(Boolean).slice(0, 30).map(line => {
       const [name, date, ...msgParts] = line.split('|');
       return { name, date, message: msgParts.join('|') };
     });
