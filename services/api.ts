@@ -453,6 +453,19 @@ export interface GitInfo {
   error?: string;
 }
 
+export const readFileContent = async (path: string): Promise<{ content: string; filename: string; size: number }> => {
+  const res = await fetch(`${API_BASE}/file/read?path=${encodeURIComponent(path)}`, { headers: getAuthHeaders() });
+  return handleResponse(res);
+};
+
+export const writeFileContent = async (path: string, content: string): Promise<{ success: boolean; size: number }> => {
+  const res = await fetch(`${API_BASE}/file/write`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, content }),
+  });
+  return handleResponse(res);
+};
+
 export const getGitInfo = async (path: string): Promise<GitInfo> => {
   const res = await fetch(`${API_BASE}/git/info?path=${encodeURIComponent(path)}`, {
     headers: getAuthHeaders(),

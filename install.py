@@ -532,10 +532,20 @@ def main():
     # ── Step 5: CORS ──────────────────────────────────────────────────────────
     step(5, "Allowed origins (CORS)")
     if IS_TTY:
-        print(f"  {gray('*')}               — allow all (fine for local/home use)")
-        print(f"  {gray('https://x.com')} — restrict to your domain (production)")
+        print(f"  {gray('*')}                    — allow all origins  {green('(recommended for most setups)')}")
+        print(f"  {gray('http://192.168.1.5:4343')} — restrict to your server IP")
+        print(f"  {gray('https://files.mysite.com')} — restrict to your domain")
+        print()
+        print(f"  {yellow('Tip:')} KroomDrive uses JWT auth headers — CORS origin does NOT")
+        print(f"  {yellow('     ')} affect security. Use {cyan('*')} unless you need strict origin control.")
         print()
         cors = ask("CORS origin", "*")
+        # Warn if user typed something that looks wrong
+        if cors != "*" and not cors.startswith("http"):
+            warn("CORS origin should start with http:// or https:// (or use *)")
+            warn("Example: http://192.168.1.5:4343  or  https://files.example.com")
+            if not ask_bool("Continue with this value?", default=False):
+                cors = ask("CORS origin", "*")
     else:
         cors = "*"
         ok(f"CORS origin: {cors} (default)")

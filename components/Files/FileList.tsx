@@ -1,11 +1,33 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { FileItem } from '../../types';
 import { FileIcon } from '../Icons';
 import { formatSize, formatDate } from '../../utils/formatters';
 import { Loader2, AlertCircle, Search, Folder as FolderIcon, MoreVertical, CheckCircle2, Circle } from 'lucide-react';
 import { useFile } from '../../contexts/FileContext';
+import { FileEditor } from './FileEditor';
 import * as api from '../../services/api';
+
+// File extensions that can be opened in the editor
+const EDITABLE_EXTS = new Set([
+  'js','jsx','ts','tsx','mjs','cjs',
+  'py','pyw','rb','go','rs','php','java','c','cpp','h','hpp','cs','kt','swift',
+  'html','htm','css','scss','sass','less',
+  'json','jsonc','yaml','yml','xml','svg','toml','ini','env','conf','cfg',
+  'md','mdx','txt','log','sh','bash','zsh','bat','ps1',
+  'sql','r','lua','perl','pl','dockerfile','gitignore','gitattributes',
+  'nginx','htaccess',
+]);
+
+function isEditable(filename: string): boolean {
+  if (!filename.includes('.')) {
+    // No extension — allow common config files
+    const noExt = ['dockerfile', 'makefile', 'procfile', 'readme', '.env', '.gitignore', '.gitattributes'];
+    return noExt.some(n => filename.toLowerCase().includes(n));
+  }
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return EDITABLE_EXTS.has(ext);
+}
 
 interface FileListProps {
   onContextMenu: (e: React.MouseEvent, item: FileItem | null) => void;
@@ -14,16 +36,10 @@ interface FileListProps {
 
 export const FileList: React.FC<FileListProps> = ({ onContextMenu, onNavigate }) => {
   const { 
-    files, 
-    viewMode, 
-    loading, 
-    error, 
-    searchQuery, 
-    refreshFiles, 
-    selectedPaths, 
-    toggleSelection, 
-    clearSelection 
+    files, viewMode, loading, error, searchQuery, refreshFiles, selectedPaths, toggleSelection, clearSelection 
   } = useFile();
+
+  const [editingPath, setEditingPath] = useState<string | null>(null);
 
   const handleDownload = (item: FileItem) => {
     if (item.type === 'folder') return;
@@ -31,11 +47,13 @@ export const FileList: React.FC<FileListProps> = ({ onContextMenu, onNavigate })
   };
 
   const handleDoubleClick = (file: FileItem) => {
-      if (file.type === 'folder') {
-          onNavigate(file.path);
-      } else {
-          handleDownload(file);
-      }
+    if (file.type === 'folder') {
+      onNavigate(file.path);
+    } else if (isEditable(file.name)) {
+      setEditingPath(file.path);
+    } else {
+      handleDownload(file);
+    }
   }
 
   const handleClick = (e: React.MouseEvent, file: FileItem) => {
@@ -197,6 +215,14 @@ export const FileList: React.FC<FileListProps> = ({ onContextMenu, onNavigate })
              </tbody>
            </table>
          </div>
+      )}
+
+      {/* File Editor overlay */}
+      {editingPath && (
+        <FileEditor
+          filePath={editingPath}
+          onClose={() => setEditingPath(null)}
+        />
       )}
     </div>
   );

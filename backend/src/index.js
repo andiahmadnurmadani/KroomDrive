@@ -14,19 +14,56 @@ const server = http.createServer(app);
 
 // ─── CORS helper ─────────────────────────────────────────────────────────────
 function getCorsOrigin() {
-  const raw = process.env.CORS_ORIGIN || '*';
+  const raw = (process.env.CORS_ORIGIN || '*').trim();
   if (raw === '*') return '*';
-  // Support comma-separated list
+  // Support comma-separated list of origins
   const origins = raw.split(',').map(o => o.trim()).filter(Boolean);
   return origins.length === 1 ? origins[0] : origins;
 }
+
+// Dynamic CORS origin function for express-cors — supports exact list, wildcard, or regex
+function makeCorsOriginFn(corsOrigin) {
+  if (corsOrigin === '*') return '*';
+
+  const allowed = Array.isArray(corsOrigin) ? corsOrigin : [corsOrigin];
+
+  return function (origin, callback) {
+    // Allow requests with no Origin (server-to-server, curl, mobile apps)
+    if (!origin) return callback(null, true);
+
+    if (allowed.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Also allow if origin matches without trailing slash
+    const normalized = origin.replace(/\/$/, '');
+    if (allowed.some(o => o.replace(/\/$/, '') === normalized)) {
+      return callback(null, true);
+    }
+
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  };
+}
+
 const corsOrigin = getCorsOrigin();
+const corsOptions = {
+  origin: makeCorsOriginFn(corsOrigin),
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Disposition'],
+  // credentials only needed if origin is specific (not wildcard)
+  // With wildcard '*', browsers forbid credentials:true — so guard it
+  credentials: corsOrigin !== '*',
+  optionsSuccessStatus: 200,
+};
 
 // ─── Socket.IO ───────────────────────────────────────────────────────────────
 const io = new Server(server, {
   cors: {
-    origin: corsOrigin,
+    // Socket.IO cors uses the same origin logic
+    origin: corsOrigin === '*' ? '*' : makeCorsOriginFn(corsOrigin),
     methods: ['GET', 'POST'],
+    credentials: corsOrigin !== '*',
   },
   transports: ['websocket', 'polling'],
 });
@@ -51,11 +88,7 @@ io.on('connection', (socket) => {
 });
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
-app.use(cors({
-  origin: corsOrigin,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

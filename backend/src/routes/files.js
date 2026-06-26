@@ -567,7 +567,47 @@ router.post('/trash/empty', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── POST /api/share — give a user access to a path ─────────────────────────
+// ─── GET /api/file/read?path= ────────────────────────────────────────────────
+// Read a text file for the editor
+router.get('/file/read', async (req, res) => {
+  const { path: inputPath } = req.query;
+  if (!inputPath) return res.status(400).json({ error: 'path required' });
+
+  const perm = getPermForPath(req.user, inputPath);
+  if (!perm || !perm.can_read) return res.status(403).json({ error: 'Read access denied' });
+
+  try {
+    const { serverId, remotePath } = resolvePath(req.user, inputPath);
+    const { sftp } = await getSftp(serverId);
+    const buffer = await sftpReadFile(sftp, remotePath);
+    const content = buffer.toString('utf8');
+    const filename = remotePath.split('/').pop() || '';
+    res.json({ content, filename, size: buffer.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── POST /api/file/write ─────────────────────────────────────────────────────
+// Save a file from the editor
+router.post('/file/write', async (req, res) => {
+  const { path: inputPath, content } = req.body;
+  if (!inputPath) return res.status(400).json({ error: 'path required' });
+  if (content === undefined) return res.status(400).json({ error: 'content required' });
+
+  const perm = getPermForPath(req.user, inputPath);
+  if (!perm || !perm.can_write) return res.status(403).json({ error: 'Write access denied' });
+
+  try {
+    const { serverId, remotePath } = resolvePath(req.user, inputPath);
+    const { sftp } = await getSftp(serverId);
+    const buffer = Buffer.from(content, 'utf8');
+    await sftpWriteFile(sftp, remotePath, buffer);
+    res.json({ success: true, size: buffer.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 router.post('/share', requireAdmin, async (req, res) => {
   const { username, path: sharePath, permissions, quotaGB, serverId } = req.body;
   if (!username || !sharePath) return res.status(400).json({ error: 'username and path required' });
