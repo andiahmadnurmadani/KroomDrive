@@ -609,3 +609,75 @@ export const deleteGitCredentials = async (path: string): Promise<void> => {
   });
   return handleResponse(res);
 };
+
+// ─── System / Self-Update ─────────────────────────────────────────────────────
+
+export interface UpdateCommit {
+  hash: string;
+  author: string;
+  relTime: string;
+  subject: string;
+}
+
+export interface UpdateCheckResult {
+  hasUpdate: boolean;
+  commits: UpdateCommit[];
+  currentCommit: string;
+  remoteCommit: string;
+  branch: string;
+  error?: string;
+}
+
+export const checkForUpdates = async (): Promise<UpdateCheckResult> => {
+  const res = await fetch(`${API_BASE}/system/update-check`, { headers: getAuthHeaders() });
+  return handleResponse(res);
+};
+
+// Returns an EventSource URL for the SSE update stream
+export const getUpdateStreamUrl = (): string => `${API_BASE}/system/update`;
+
+export const startUpdate = (
+  onMessage: (type: string, message: string) => void,
+  onComplete: () => void,
+  onError: (msg: string) => void,
+): (() => void) => {
+  const token = localStorage.getItem('token');
+
+  // POST to kick off update, then open SSE
+  fetch(`${API_BASE}/system/update`, {
+    method: 'POST',
+    headers: getAuthHeaders() as any,
+  }).then(res => {
+    if (!res.ok) {
+      res.json().then(d => onError(d.error || 'Update failed')).catch(() => onError('Update failed'));
+      return;
+    }
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const pump = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { onComplete(); break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const { type, message } = JSON.parse(line.slice(6));
+              onMessage(type, message);
+              if (type === 'complete') onComplete();
+              if (type === 'error') onError(message);
+            } catch (_) {}
+          }
+        }
+      }
+    };
+    pump().catch(e => onError(e.message));
+  }).catch(e => onError(e.message));
+
+  // Return cancel fn (not easily cancellable for fetch streams, but give a no-op)
+  return () => {};
+};

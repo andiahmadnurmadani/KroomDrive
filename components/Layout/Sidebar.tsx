@@ -7,6 +7,7 @@ import { formatSize } from '../../utils/formatters';
 import { QuotaItem } from '../../types';
 import * as api from '../../services/api';
 import { KroomLogo } from '../Icons';
+import { UpdateBadge, UpdateModal, useUpdateChecker } from './UpdateChecker';
 
 interface SidebarProps {
   onNavigateTrash: () => void;
@@ -45,6 +46,10 @@ const StorageSkeleton = () => (
 export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdmin, onNavigateFiles, currentView, collapsed, onToggleCollapse }) => {
   const { user, logout } = useAuth();
   const { currentPath, setCurrentPath, storageStats, assignedDrives, files, fetchDriveInfo, loadingDrives } = useFile();
+  
+  // Update checker — admin only
+  const isAdmin = user?.role === 'admin';
+  const { checking: checkingUpdate, hasUpdate, result: updateResult, showModal: showUpdateModal, openModal: openUpdateModal, closeModal: closeUpdateModal } = useUpdateChecker();
   
   // Storage Stats State — derive from context loadingDrives
   const [loadingStats, setLoadingStats] = useState<boolean>(true);
@@ -236,6 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
   // ── Collapsed mode ─────────────────────────────────────────────────────────
   if (collapsed) {
     return (
+      <>
       <aside className="w-16 bg-white flex flex-col flex-shrink-0 z-20 h-full shadow-soft m-4 rounded-[20px] overflow-hidden border border-gray-100 transition-all duration-200 ease-in-out">
         {/* Logo */}
         <div className="flex items-center justify-center pt-5 pb-3">
@@ -297,6 +303,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
 
         {/* Bottom: avatar + toggle */}
         <div className="flex flex-col items-center gap-2 p-3">
+          {/* Update badge (admin only) */}
+          {isAdmin && (
+            <UpdateBadge
+              onClick={openUpdateModal}
+              checking={checkingUpdate}
+              hasUpdate={hasUpdate}
+              collapsed={true}
+            />
+          )}
           {/* User avatar */}
           <div
             title={`${user?.username} · ${user?.role}`}
@@ -314,11 +329,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
           </button>
         </div>
       </aside>
+
+      {showUpdateModal && updateResult && (
+        <UpdateModal
+          info={updateResult}
+          onClose={closeUpdateModal}
+          onUpdated={() => { closeUpdateModal(); window.location.reload(); }}
+        />
+      )}
+      </>
     );
   }
 
   // ── Expanded mode ───────────────────────────────────────────────────────────
   return (
+    <>
     <aside className="w-[280px] bg-white flex flex-col flex-shrink-0 z-20 h-full shadow-soft m-4 rounded-[20px] overflow-hidden border border-gray-100 transition-all duration-200 ease-in-out">
         {/* Brand */}
         <div className="p-8 flex items-center justify-center">
@@ -640,6 +665,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
             </div>
             )} {/* end storage widget conditional */}
 
+            {/* Update Banner (admin only) */}
+            {isAdmin && (
+              <div className="px-2 pb-1">
+                <UpdateBadge
+                  onClick={openUpdateModal}
+                  checking={checkingUpdate}
+                  hasUpdate={hasUpdate}
+                  collapsed={false}
+                />
+              </div>
+            )}
+
             {/* Profile */}
             {/* Profile + collapse toggle */}
             <div className="flex items-center gap-3 px-2">
@@ -667,5 +704,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
             </div>
         </div>
     </aside>
+
+    {/* Update Modal — rendered outside aside to avoid stacking context issues */}
+    {showUpdateModal && updateResult && (
+      <UpdateModal
+        info={updateResult}
+        onClose={closeUpdateModal}
+        onUpdated={() => { closeUpdateModal(); window.location.reload(); }}
+      />
+    )}
+    </>
   );
 };

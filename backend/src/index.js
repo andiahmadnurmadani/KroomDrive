@@ -100,6 +100,7 @@ const serverRoutes  = require('./routes/servers');
 const storageRoutes = require('./routes/storages');
 const fileRoutes    = require('./routes/files');
 const gitRoutes     = require('./routes/git');
+const systemRoutes  = require('./routes/system');
 
 app.use('/api', authRoutes);
 app.use('/api/users', userRoutes);
@@ -107,6 +108,7 @@ app.use('/api/servers', serverRoutes);
 app.use('/api/storages', storageRoutes);
 app.use('/api', fileRoutes);
 app.use('/api/git', gitRoutes);
+app.use('/api/system', systemRoutes);
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
