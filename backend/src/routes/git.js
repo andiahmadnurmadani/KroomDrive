@@ -65,7 +65,8 @@ function getPermForPath(user, inputPath) {
 async function gitExec(serverId, remotePath, gitArgs) {
   // Sanitize: prevent shell injection in args
   const safeArgs = gitArgs.replace(/[`$;|&<>]/g, '');
-  const cmd = `cd "${remotePath}" && git ${safeArgs} 2>&1`;
+  // Use printf to cd safely — avoids zsh "too many arguments" on paths with spaces
+  const cmd = `cd -- "${remotePath}" && git ${safeArgs} 2>&1`;
   return execCommand(serverId, cmd);
 }
 
@@ -122,63 +123,55 @@ function sshToHttps(remoteUrl) {
 }
 
 // ─── Patched gitExec that injects credentials via URL rewrite ─────────────────
-// This is the most reliable approach — works on GitHub, GitLab, Bitbucket, etc.
-// We temporarily override the remote URL with embedded credentials for the operation,
-// then immediately restore the original URL.
 async function gitExecAuth(serverId, remotePath, gitArgs) {
-  // gitArgs must NOT have dangerous chars — allow $ for potential env vars
   const safeArgs = gitArgs.replace(/[`|&<>]/g, '');
 
   const cred = getStoredCred(serverId, remotePath);
 
   if (!cred || !cred.token) {
-    // No credentials — run plain (public repo or SSH key)
-    const cmd = `cd "${remotePath}" && GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1`;
+    const cmd = `cd -- "${remotePath}" && GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1`;
     return execCommand(serverId, cmd);
   }
 
   // Get current remote URL
   let remoteUrl = '';
   try {
-    remoteUrl = (await execCommand(serverId, `cd "${remotePath}" && git remote get-url origin 2>/dev/null`)).trim();
+    remoteUrl = (await execCommand(serverId, `cd -- "${remotePath}" && git remote get-url origin 2>/dev/null`)).trim();
   } catch (_) {}
 
   // Convert SSH to HTTPS if needed (token auth requires HTTPS)
   const httpsUrl = sshToHttps(remoteUrl);
   if (!httpsUrl) {
-    // Can't determine URL or non-standard protocol — run without creds
-    const cmd = `cd "${remotePath}" && GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1`;
+    const cmd = `cd -- "${remotePath}" && GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1`;
     return execCommand(serverId, cmd);
   }
 
   const credUrl = injectCredsIntoUrl(httpsUrl, cred.username, cred.token);
   if (!credUrl) {
-    const cmd = `cd "${remotePath}" && GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1`;
+    const cmd = `cd -- "${remotePath}" && GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1`;
     return execCommand(serverId, cmd);
   }
 
-  // If original remote was SSH, temporarily set HTTPS URL for this operation
-  // using git -c url.<credUrl>.insteadOf=<originalUrl> — no config file is modified
-  const originalForReplace = remoteUrl;
-  
-  // Escape single quotes in the credential URL for shell safety
-  const escapedCredUrl = credUrl.replace(/'/g, "'\\''");
-  const escapedOrigUrl  = originalForReplace.replace(/'/g, "'\\''");
-
-  // Primary approach: url.insteadOf (cleanest, no config mutation)
-  // Fallback: credential.helper inline (if insteadOf doesn't work)
   const safeUser = (cred.username || 'oauth2').replace(/['"\\]/g, '');
   const safeTok  = cred.token.replace(/['"\\]/g, '');
 
-  const cmd = [
-    `cd "${remotePath}"`,
-    `GIT_TERMINAL_PROMPT=0`,
-    `git`,
-    `-c "url.'${escapedCredUrl}'.insteadOf='${escapedOrigUrl}'"`,
-    `-c "credential.helper='!f() { echo username=${safeUser}; echo password=${safeTok}; }; f'"`,
-    safeArgs,
-    `2>&1`,
-  ].join(' ');
+  // Use credential.helper approach — most reliable across git versions and shells.
+  // The helper script echoes username/password when git prompts for credentials.
+  // GIT_TERMINAL_PROMPT=0 disables interactive prompts so it fails fast instead of hanging.
+  const credHelper = `!f() { echo username=${safeUser}; echo password=${safeTok}; }; f`;
+
+  // If remote was SSH, also rewrite the URL to HTTPS for this operation
+  let extraConfig = '';
+  if (remoteUrl !== httpsUrl) {
+    // Remote is SSH — tell git to use the HTTPS URL instead
+    // Escape the URL values for use inside single-quoted shell strings
+    const escapedHttps   = httpsUrl.replace(/'/g, "'\\''");
+    const escapedRemote  = remoteUrl.replace(/'/g, "'\\''");
+    extraConfig = ` -c "url.${escapedHttps}.insteadOf=${escapedRemote}"`;
+  }
+
+  // Build the final command — cd first, then env var + git on the same line
+  const cmd = `cd -- "${remotePath}" && GIT_TERMINAL_PROMPT=0 git${extraConfig} -c "credential.helper=${credHelper}" ${safeArgs} 2>&1`;
 
   return execCommand(serverId, cmd);
 }
@@ -197,7 +190,7 @@ router.get('/info', async (req, res) => {
 
     // Run all git info queries in parallel as one compound command
     const script = `
-      cd "${remotePath}" 2>/dev/null || exit 1
+      cd -- "${remotePath}" 2>/dev/null || exit 1
       echo "---BRANCH---"
       git rev-parse --abbrev-ref HEAD 2>/dev/null || echo ""
       echo "---REMOTE_URL---"
@@ -494,7 +487,7 @@ router.post('/commit', async (req, res) => {
     const { serverId, remotePath } = resolvePath(req.user, inputPath);
     const safeMsg = message.replace(/"/g, '\\"').replace(/`/g, '');
     const addCmd  = addAll ? 'git add -A && ' : '';
-    const cmd = `cd "${remotePath}" && ${addCmd}git commit -m "${safeMsg}" 2>&1`;
+    const cmd = `cd -- "${remotePath}" && ${addCmd}git commit -m "${safeMsg}" 2>&1`;
     const output = await execCommand(serverId, cmd);
     res.json({ success: true, output });
   } catch (e) {
