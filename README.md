@@ -1,16 +1,9 @@
 ﻿<div align="center">
 
-<!-- Logo / Banner -->
-<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/banner.png" alt="KroomDrive Banner" width="100%" />
+<!-- Banner -->
+<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/banner.svg" alt="KroomDrive" width="100%" />
 
-<br/>
-
-# KroomDrive
-
-**Self-hosted, multi-user SSH file manager**  
-Built with ❤️ by [KroomBox](https://kroombox.com)
-
-<br/>
+<br/><br/>
 
 [![GitHub release](https://img.shields.io/github/v/release/andiahmadnurmadani/kroomdrive?style=flat-square&color=4318FF&label=version)](https://github.com/andiahmadnurmadani/KroomDrive/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4318FF?style=flat-square)](LICENSE)
@@ -20,8 +13,8 @@ Built with ❤️ by [KroomBox](https://kroombox.com)
 
 <br/>
 
-[🌐 Website](https://kroombox.com) &nbsp;·&nbsp;
-[📸 Instagram](https://instagram.com/kroombox) &nbsp;·&nbsp;
+[🌐 kroombox.com](https://kroombox.com) &nbsp;·&nbsp;
+[📸 @kroombox](https://instagram.com/kroombox) &nbsp;·&nbsp;
 [🐛 Issues](https://github.com/andiahmadnurmadani/KroomDrive/issues) &nbsp;·&nbsp;
 [⭐ Star this repo](https://github.com/andiahmadnurmadani/KroomDrive)
 
@@ -36,10 +29,9 @@ KroomDrive is a **self-hosted file manager** that lets you browse, upload, and m
 <div align="center">
 <br/>
 
-<!-- Main Screenshot -->
-<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/screenshot-main.png" alt="KroomDrive Dashboard" width="90%" style="border-radius:12px" />
+> 📸 Screenshots coming soon
 
-<br/><br/>
+<br/>
 
 </div>
 
@@ -94,12 +86,7 @@ KroomDrive is a **self-hosted file manager** that lets you browse, upload, and m
 <div align="center">
 <br/>
 
-<!-- Grid Screenshots -->
-<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/screenshot-admin.png" alt="Admin Console" width="45%" style="border-radius:10px; margin:6px" />
-&nbsp;
-<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/screenshot-git.png" alt="Git Panel" width="45%" style="border-radius:10px; margin:6px" />
-
-<sub>Admin Console · Git Integration Panel</sub>
+> 📸 More screenshots coming soon
 
 <br/><br/>
 
@@ -392,10 +379,12 @@ MIT — free to use, modify, and distribute.
 Made with ❤️ by
 
 <a href="https://kroombox.com">
-  <img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/kroombox-logo.png" alt="KroomBox" height="40" />
+  <img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/logo.svg" alt="KroomDrive Logo" height="48" />
 </a>
 
 <br/><br/>
+
+**KroomBox**
 
 [![Website](https://img.shields.io/badge/kroombox.com-4318FF?style=for-the-badge&logo=google-chrome&logoColor=white)](https://kroombox.com)
 [![Instagram](https://img.shields.io/badge/@kroombox-E1306C?style=for-the-badge&logo=instagram&logoColor=white)](https://instagram.com/kroombox)
