@@ -681,3 +681,19 @@ export const startUpdate = (
   // Return cancel fn (not easily cancellable for fetch streams, but give a no-op)
   return () => {};
 };
+
+// ─── System Git Credentials (for KroomDrive self-update) ─────────────────────
+
+export const getSystemGitCredentials = async (): Promise<{ exists: boolean; username: string | null; hasToken: boolean }> => {
+  const res = await fetch(`${API_BASE}/system/git-credentials`, { headers: getAuthHeaders() });
+  return handleResponse(res);
+};
+
+export const saveSystemGitCredentials = async (username: string, token: string): Promise<void> => {
+  const res = await fetch(`${API_BASE}/system/git-credentials`, {
+    method: 'POST',
+    headers: getAuthHeaders() as any,
+    body: JSON.stringify({ username, token }),
+  });
+  return handleResponse(res);
+};

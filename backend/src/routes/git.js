@@ -146,32 +146,34 @@ async function gitExecAuth(serverId, remotePath, gitArgs) {
     return execCommand(serverId, cmd);
   }
 
+  // Build credentialed URL: https://user:token@github.com/...
   const credUrl = injectCredsIntoUrl(httpsUrl, cred.username, cred.token);
   if (!credUrl) {
     const cmd = `cd -- "${remotePath}" && GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1`;
     return execCommand(serverId, cmd);
   }
 
-  const safeUser = (cred.username || 'oauth2').replace(/['"\\]/g, '');
-  const safeTok  = cred.token.replace(/['"\\]/g, '');
+  // Strategy: temporarily rewrite the remote URL to include credentials,
+  // run the git command, then restore the original URL.
+  // This avoids shell escaping issues with credential.helper inline scripts.
+  //
+  // We also set the HTTPS URL as insteadOf the original (handles both SSH and HTTPS remotes).
+  const escapedCredUrl  = credUrl.replace(/"/g, '\\"');
+  const escapedOrigUrl  = remoteUrl.replace(/"/g, '\\"');
 
-  // Use credential.helper approach — most reliable across git versions and shells.
-  // The helper script echoes username/password when git prompts for credentials.
-  // GIT_TERMINAL_PROMPT=0 disables interactive prompts so it fails fast instead of hanging.
-  const credHelper = `!f() { echo username=${safeUser}; echo password=${safeTok}; }; f`;
-
-  // If remote was SSH, also rewrite the URL to HTTPS for this operation
-  let extraConfig = '';
-  if (remoteUrl !== httpsUrl) {
-    // Remote is SSH — tell git to use the HTTPS URL instead
-    // Escape the URL values for use inside single-quoted shell strings
-    const escapedHttps   = httpsUrl.replace(/'/g, "'\\''");
-    const escapedRemote  = remoteUrl.replace(/'/g, "'\\''");
-    extraConfig = ` -c "url.${escapedHttps}.insteadOf=${escapedRemote}"`;
-  }
-
-  // Build the final command — cd first, then env var + git on the same line
-  const cmd = `cd -- "${remotePath}" && GIT_TERMINAL_PROMPT=0 git${extraConfig} -c "credential.helper=${credHelper}" ${safeArgs} 2>&1`;
+  const cmd = [
+    `cd -- "${remotePath}"`,
+    // Save original remote URL
+    `&& ORIG_URL=$(git remote get-url origin 2>/dev/null)`,
+    // Set credentialed URL
+    `&& git remote set-url origin "${escapedCredUrl}"`,
+    // Run the actual git operation
+    `&& GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1; EXIT_CODE=$?`,
+    // Always restore original URL regardless of success/failure
+    `; git remote set-url origin "${escapedOrigUrl}" 2>/dev/null`,
+    // Exit with the git operation's exit code
+    `; exit $EXIT_CODE`,
+  ].join(' ');
 
   return execCommand(serverId, cmd);
 }
