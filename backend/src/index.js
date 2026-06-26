@@ -113,9 +113,29 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ─── 404 Handler ─────────────────────────────────────────────────────────────
+// ─── Static Frontend (production) ────────────────────────────────────────────
+// When NODE_ENV=production, serve the built frontend from ../dist
+// This means only one port is needed — nginx/Cloudflare proxies everything here
+const DIST_DIR = path.resolve(__dirname, '../../dist');
+const fs = require('fs');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR, { maxAge: '1d', etag: true }));
+  // SPA fallback — all non-API routes serve index.html
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+  });
+  console.log(`🌐 Serving frontend from: ${DIST_DIR}`);
+} else if (process.env.NODE_ENV === 'production') {
+  console.warn(`⚠️  Frontend dist not found at ${DIST_DIR}. Run 'npm run build' in the project root.`);
+}
+
+// ─── 404 Handler (API only in dev, or if dist missing) ───────────────────────
 app.use((req, res) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+    res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+  } else {
+    res.status(404).json({ error: 'Not found' });
+  }
 });
 
 // ─── Error Handler ───────────────────────────────────────────────────────────
