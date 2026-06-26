@@ -21,6 +21,9 @@ ROOT = Path(__file__).parent.resolve()
 BACKEND_DIR = ROOT / "backend"
 SYSTEM = platform.system()  # Windows / Linux / Darwin
 
+# Detect if running non-interactively (piped from curl | bash | python)
+IS_TTY = sys.stdin.isatty()
+
 
 # ─── Terminal colors ──────────────────────────────────────────────────────────
 
@@ -47,6 +50,11 @@ def step(n, title): print(f"\n  {bold(cyan(f'[{n}]'))} {bold(title)}")
 
 def ask(prompt, default=""):
     suffix = f" [{default}]" if default else ""
+    if not IS_TTY:
+        # Non-interactive: just use default
+        val = default
+        print(f"      {gray('›')} {prompt}{gray(suffix)}: {cyan(val) if val else gray('(default)')}")
+        return val
     try:
         val = input(f"      {gray('›')} {prompt}{gray(suffix)}: ").strip()
         return val if val else default
@@ -60,6 +68,12 @@ def ask_bool(prompt, default=True):
     return val in ("y", "yes", "1", "true")
 
 def ask_secret(prompt):
+    if not IS_TTY:
+        # Non-interactive: generate a random password
+        import secrets as _s
+        val = _s.token_urlsafe(16)
+        print(f"      {gray('›')} {prompt}: {gray('(auto-generated)')}")
+        return val
     try:
         val = getpass.getpass(f"      {gray('›')} {prompt}: ").strip()
         return val
@@ -478,36 +492,53 @@ def main():
 
     # ── Step 3: Run mode ──────────────────────────────────────────────────────
     step(3, "Run mode")
-    print(f"  {gray('PM2')}  — managed process, auto-restart, logs, startup on reboot {green('(recommended)')}")
-    print(f"  {gray('Dev')}  — simple background shell processes, easy for development")
-    print()
-    use_pm2 = has_pm2 and ask_bool("Use PM2?", default=True)
-    ok(f"Mode: {'PM2 (production)' if use_pm2 else 'Dev (simple)'}")
+    if not IS_TTY:
+        info("Non-interactive mode — using PM2 if available, dev mode otherwise.")
+        use_pm2 = has_pm2
+        ok(f"Mode: {'PM2 (production)' if use_pm2 else 'Dev (simple)'}")
+    else:
+        print(f"  {gray('PM2')}  — managed process, auto-restart, logs, startup on reboot {green('(recommended)')}")
+        print(f"  {gray('Dev')}  — simple background shell processes, easy for development")
+        print()
+        use_pm2 = has_pm2 and ask_bool("Use PM2?", default=True)
+        ok(f"Mode: {'PM2 (production)' if use_pm2 else 'Dev (simple)'}")
 
     # ── Step 4: Admin account ─────────────────────────────────────────────────
     step(4, "Admin account")
-    info("This seeds the first admin user. Only used on the very first run.")
-    print()
-    admin_user = ask("Admin username", "admin")
-    while True:
-        admin_pass = ask_secret("Admin password (min 8 chars)")
-        if len(admin_pass) < 8:
-            warn("Password must be at least 8 characters")
-            continue
-        admin_pass2 = ask_secret("Confirm password")
-        if admin_pass != admin_pass2:
-            warn("Passwords do not match, try again")
-            continue
-        break
+    if IS_TTY:
+        info("This seeds the first admin user. Only used on the very first run.")
+        print()
+        admin_user = ask("Admin username", "admin")
+        while True:
+            admin_pass = ask_secret("Admin password (min 8 chars)")
+            if len(admin_pass) < 8:
+                warn("Password must be at least 8 characters")
+                continue
+            admin_pass2 = ask_secret("Confirm password")
+            if admin_pass != admin_pass2:
+                warn("Passwords do not match, try again")
+                continue
+            break
+    else:
+        admin_user = "admin"
+        admin_pass = secrets.token_urlsafe(16)
+        warn("Non-interactive mode — admin credentials auto-generated:")
+        print(f"      Username : {cyan(admin_user)}")
+        print(f"      Password : {cyan(admin_pass)}")
+        print(f"      {yellow('Save this password! You can change it later in Admin Console.')}")
     ok(f"Username: {admin_user}")
     ok("Password: set")
 
     # ── Step 5: CORS ──────────────────────────────────────────────────────────
     step(5, "Allowed origins (CORS)")
-    print(f"  {gray('*')}               — allow all (fine for local/home use)")
-    print(f"  {gray('https://x.com')} — restrict to your domain (production)")
-    print()
-    cors = ask("CORS origin", "*")
+    if IS_TTY:
+        print(f"  {gray('*')}               — allow all (fine for local/home use)")
+        print(f"  {gray('https://x.com')} — restrict to your domain (production)")
+        print()
+        cors = ask("CORS origin", "*")
+    else:
+        cors = "*"
+        ok(f"CORS origin: {cors} (default)")
 
     # ── Step 6: Security keys ─────────────────────────────────────────────────
     step(6, "Generating security keys")
@@ -537,9 +568,17 @@ def main():
     started = False
     if use_pm2:
         step(10, "Starting KroomDrive")
-        if ask_bool("Start KroomDrive now via PM2?", default=True):
+        should_start = True if not IS_TTY else ask_bool("Start KroomDrive now via PM2?", default=True)
+        if should_start:
             started = pm2_start_now(eco)
-        offer_pm2_startup(use_pm2)
+        if IS_TTY:
+            offer_pm2_startup(use_pm2)
+        elif SYSTEM != "Windows":
+            # Auto-register startup in non-interactive mode
+            info("Registering PM2 startup service…")
+            subprocess.run(["pm2", "startup"], capture_output=True)
+            subprocess.run(["pm2", "save"], capture_output=True)
+            ok("PM2 startup registered")
 
     # ── Done ──────────────────────────────────────────────────────────────────
     launch_cmd = ("start.bat" if SYSTEM == "Windows"

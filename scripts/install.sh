@@ -1,10 +1,10 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # KroomDrive — One-line installer bootstrap
-# Usage: curl -fsSL https://raw.githubusercontent.com/andiahmadnurmadani/kroomdrive/main/scripts/install.sh | bash
-#    or: wget -qO- https://raw.githubusercontent.com/andiahmadnurmadani/kroomdrive/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/scripts/install.sh | bash
+#    or: wget -qO- https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/scripts/install.sh | bash
 set -e
 
-REPO_URL="https://github.com/andiahmadnurmadani/kroomdrive"
+REPO_URL="https://github.com/andiahmadnurmadani/KroomDrive"
 BRANCH="main"
 INSTALL_DIR="${KROOMDRIVE_DIR:-$HOME/kroomdrive}"
 
@@ -32,11 +32,10 @@ else
     fail "Python 3.8+ is required. Install it from https://python.org"
 fi
 
-# Verify version >= 3.8
 $PYTHON -c "import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)" || \
     fail "Python 3.8+ required. You have: $($PYTHON --version)"
 
-# ── Check git & clone ─────────────────────────────────────────────────────────
+# ── Check git & clone / update ────────────────────────────────────────────────
 step 2 "Getting KroomDrive"
 if [ -d "$INSTALL_DIR/.git" ]; then
     info "Existing installation found at $INSTALL_DIR"
@@ -47,7 +46,6 @@ elif command -v git &>/dev/null; then
     git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
     ok "Cloned"
 else
-    # No git — try downloading archive
     warn "git not found, trying to download archive…"
     ARCHIVE_URL="${REPO_URL}/archive/refs/heads/${BRANCH}.tar.gz"
     TMP=$(mktemp -d)
@@ -58,7 +56,9 @@ else
     else
         fail "Neither git, curl, nor wget found. Please install git."
     fi
-    mv "$TMP"/*/ "$INSTALL_DIR" 2>/dev/null || mv "$TMP"/kroomdrive-*/ "$INSTALL_DIR"
+    mv "$TMP"/KroomDrive-*/ "$INSTALL_DIR" 2>/dev/null || \
+    mv "$TMP"/kroomdrive-*/ "$INSTALL_DIR" 2>/dev/null || \
+    mv "$TMP"/*/            "$INSTALL_DIR"
     ok "Downloaded"
 fi
 
@@ -66,4 +66,13 @@ fi
 step 3 "Running KroomDrive installer"
 echo -e "  ${CYAN}─────────────────────────────────${RESET}\n"
 cd "$INSTALL_DIR"
-exec $PYTHON install.py
+
+# Re-attach stdin to /dev/tty so Python installer can be interactive
+# even when this script was piped from curl | bash
+if [ -t 0 ]; then
+    # stdin is already a terminal
+    exec $PYTHON install.py
+else
+    # stdin is piped — reopen /dev/tty for interactive input
+    exec $PYTHON install.py < /dev/tty
+fi
