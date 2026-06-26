@@ -88,19 +88,25 @@ function getStoredCred(serverId, remotePath) {
 }
 
 // Inject credentials into a git HTTPS remote URL
-// https://github.com/user/repo.git  →  https://TOKEN@github.com/user/repo.git
-// or  https://user:TOKEN@github.com/user/repo.git  if username provided
+// https://github.com/user/repo.git  →  https://x-access-token:TOKEN@github.com/user/repo.git
+// Uses manual string building to avoid URL constructor quirks with token encoding.
 function injectCredsIntoUrl(remoteUrl, username, token) {
-  try {
-    // Only works for HTTPS remotes
-    if (!remoteUrl || !remoteUrl.startsWith('http')) return null;
-    const url = new URL(remoteUrl);
-    url.username = username || 'oauth2';
-    url.password = token;
-    return url.toString();
-  } catch (_) {
-    return null;
-  }
+  if (!remoteUrl || !remoteUrl.startsWith('http')) return null;
+  // Match scheme + (optional existing user:pass@) + rest of URL
+  const match = remoteUrl.match(/^(https?:\/\/)(?:[^@/]*@)?(.+)$/);
+  if (!match) return null;
+  const [, scheme, hostPath] = match;
+
+  // GitHub officially recommends 'x-access-token' as username when using a PAT.
+  // The username can technically be anything but x-access-token is safest.
+  const rawUser = (username || '').trim() || 'x-access-token';
+  const rawTok  = (token || '').trim();
+
+  // URL-encode user and token to be safe (rare special chars get encoded properly)
+  const u = encodeURIComponent(rawUser);
+  const t = encodeURIComponent(rawTok);
+
+  return `${scheme}${u}:${t}@${hostPath}`;
 }
 
 // Convert SSH remote URL to HTTPS for token auth
@@ -146,33 +152,31 @@ async function gitExecAuth(serverId, remotePath, gitArgs) {
     return execCommand(serverId, cmd);
   }
 
-  // Build credentialed URL: https://user:token@github.com/...
+  // Build credentialed URL: https://x-access-token:token@github.com/...
   const credUrl = injectCredsIntoUrl(httpsUrl, cred.username, cred.token);
   if (!credUrl) {
     const cmd = `cd -- "${remotePath}" && GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1`;
     return execCommand(serverId, cmd);
   }
 
-  // Strategy: temporarily rewrite the remote URL to include credentials,
-  // run the git command, then restore the original URL.
-  // This avoids shell escaping issues with credential.helper inline scripts.
-  //
-  // We also set the HTTPS URL as insteadOf the original (handles both SSH and HTTPS remotes).
-  const escapedCredUrl  = credUrl.replace(/"/g, '\\"');
-  const escapedOrigUrl  = remoteUrl.replace(/"/g, '\\"');
+  // Use single-quoted strings to prevent shell interpretation of $, `, etc.
+  // Tokens are URL-safe so they won't contain single quotes, but escape just in case.
+  const sqEscape = (s) => `'${s.replace(/'/g, "'\\''")}'`;
+  const credUrlQ = sqEscape(credUrl);
+  const origUrlQ = sqEscape(remoteUrl);
 
+  // Strategy:
+  // 1. Save original remote URL
+  // 2. Set credentialed URL (no log of the URL itself for security)
+  // 3. Run the git operation
+  // 4. ALWAYS restore original URL (even if op failed)
+  // 5. Exit with the op's exit code
   const cmd = [
     `cd -- "${remotePath}"`,
-    // Save original remote URL
-    `&& ORIG_URL=$(git remote get-url origin 2>/dev/null)`,
-    // Set credentialed URL
-    `&& git remote set-url origin "${escapedCredUrl}"`,
-    // Run the actual git operation
-    `&& GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1; EXIT_CODE=$?`,
-    // Always restore original URL regardless of success/failure
-    `; git remote set-url origin "${escapedOrigUrl}" 2>/dev/null`,
-    // Exit with the git operation's exit code
-    `; exit $EXIT_CODE`,
+    `&& git remote set-url origin ${credUrlQ}`,
+    `&& { GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1; _EC=$?; }`,
+    `; git remote set-url origin ${origUrlQ} 2>/dev/null`,
+    `; exit \${_EC:-1}`,
   ].join(' ');
 
   return execCommand(serverId, cmd);
@@ -648,9 +652,14 @@ router.post('/credentials', async (req, res) => {
     const { serverId, remotePath } = resolvePath(req.user, inputPath);
     const { v4: uuidv4 } = require('uuid');
 
-    // Clean token — strip any accidentally pasted whitespace
-    const cleanToken = (token || '').trim();
+    // Aggressively clean: strip ALL whitespace and control chars from token
+    const cleanToken = (token || '').replace(/[\s\r\n\t\0]/g, '');
+    // Username: trim only
     const cleanUser  = (username || '').trim() || null;
+
+    if (cleanToken.length < 10) {
+      return res.status(400).json({ error: 'Token looks too short — paste the full token' });
+    }
 
     db.prepare(`
       INSERT INTO git_credentials (id, server_id, repo_path, auth_type, username, token)
@@ -661,12 +670,61 @@ router.post('/credentials', async (req, res) => {
         token     = excluded.token
     `).run(uuidv4(), serverId, remotePath, authType, cleanUser, cleanToken);
 
-    // If remote is SSH (git@github.com:...), we can't inject HTTPS creds into it.
-    // Offer info about this — we handle it transparently by detecting URL type at exec time.
-
-    res.json({ success: true });
+    res.json({ success: true, tokenLength: cleanToken.length });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/git/credentials/test — verify credentials work BEFORE saving
+router.post('/credentials/test', async (req, res) => {
+  const { path: inputPath, username, token } = req.body;
+  if (!inputPath || !token) return res.status(400).json({ error: 'path and token required' });
+
+  const perm = getPermForPath(req.user, inputPath);
+  if (!perm || !perm.can_read) return res.status(403).json({ error: 'Access denied' });
+
+  try {
+    const { serverId, remotePath } = resolvePath(req.user, inputPath);
+
+    // Get current remote URL
+    const remoteUrl = (await execCommand(serverId, `cd -- "${remotePath}" && git remote get-url origin 2>/dev/null`)).trim();
+    if (!remoteUrl) return res.status(400).json({ error: 'No git remote configured for this folder' });
+
+    const httpsUrl = sshToHttps(remoteUrl);
+    if (!httpsUrl) return res.status(400).json({ error: 'Cannot convert remote to HTTPS for testing' });
+
+    // Clean token same way we save it
+    const cleanToken = token.replace(/[\s\r\n\t\0]/g, '');
+    const credUrl = injectCredsIntoUrl(httpsUrl, username, cleanToken);
+    if (!credUrl) return res.status(400).json({ error: 'Failed to build credentialed URL' });
+
+    // Test with git ls-remote — quick, doesn't change anything
+    const sqEscape = (s) => `'${s.replace(/'/g, "'\\''")}'`;
+    const testCmd = `GIT_TERMINAL_PROMPT=0 git ls-remote --heads ${sqEscape(credUrl)} 2>&1`;
+
+    const output = await execCommand(serverId, testCmd);
+    const lower = output.toLowerCase();
+
+    if (lower.includes('authentication failed') ||
+        lower.includes('invalid username or token') ||
+        lower.includes('password authentication') ||
+        lower.includes('could not read')) {
+      return res.json({ ok: false, error: 'Authentication failed — check your token has repo scope and is not expired' });
+    }
+
+    if (lower.includes('repository not found') || lower.includes('not found')) {
+      return res.json({ ok: false, error: 'Repository not found — token may lack access to this repo' });
+    }
+
+    // Success if we got back ref data
+    if (output.match(/[0-9a-f]{40}\s+refs\//)) {
+      return res.json({ ok: true, message: 'Token is valid — credentials will work' });
+    }
+
+    res.json({ ok: false, error: output.slice(-300) });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
   }
 });
 

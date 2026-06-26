@@ -248,6 +248,20 @@ export const GitPanel: React.FC<Props> = ({ folderPath, collapsed, onToggleColla
     finally { setCredLoading(false); }
   };
 
+  const handleTestCreds = async () => {
+    if (!credToken.trim()) return;
+    setCredLoading(true);
+    try {
+      const result = await api.testGitCredentials(folderPath, { username: credUsername, token: credToken });
+      if (result.ok) {
+        showToast(result.message || 'Token works!', 'success');
+      } else {
+        showToast(result.error || 'Test failed', 'error');
+      }
+    } catch (e: any) { handleError(e); }
+    finally { setCredLoading(false); }
+  };
+
   const handleDeleteCreds = async () => {
     setCredLoading(true);
     try {
@@ -907,6 +921,11 @@ export const GitPanel: React.FC<Props> = ({ folderPath, collapsed, onToggleColla
                             Cancel
                           </button>
                         )}
+                        <button onClick={handleTestCreds} disabled={!credToken.trim() || credLoading}
+                          className="flex-1 py-1.5 text-[11px] font-bold bg-white border border-primary-200 text-primary-600 hover:bg-primary-50 rounded-lg disabled:opacity-40 flex items-center justify-center gap-1">
+                          {credLoading ? <Loader2 size={11} className="animate-spin"/> : <CheckCircle2 size={11}/>}
+                          Test
+                        </button>
                         <button onClick={handleSaveCreds} disabled={!credToken.trim() || credLoading}
                           className="flex-1 py-1.5 text-[11px] font-bold bg-primary-600 text-white hover:bg-primary-700 rounded-lg shadow-sm disabled:opacity-40 flex items-center justify-center gap-1">
                           {credLoading ? <Loader2 size={11} className="animate-spin"/> : <Lock size={11}/>}

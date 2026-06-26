@@ -602,6 +602,16 @@ export const saveGitCredentials = async (path: string, data: {
   return handleResponse(res);
 };
 
+export const testGitCredentials = async (path: string, data: {
+  username?: string; token: string;
+}): Promise<{ ok: boolean; message?: string; error?: string }> => {
+  const res = await fetch(`${API_BASE}/git/credentials/test`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, ...data }),
+  });
+  return handleResponse(res);
+};
+
 export const deleteGitCredentials = async (path: string): Promise<void> => {
   const res = await fetch(`${API_BASE}/git/credentials`, {
     method: 'DELETE', headers: getAuthHeaders() as any,
