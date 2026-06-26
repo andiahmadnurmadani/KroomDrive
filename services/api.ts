@@ -1,8 +1,8 @@
 
 import { FileItem, LoginResponse, StorageInfo, FolderSizeResponse, TrashItem, AssignedDrive, Permissions, User, StorageDefinition, MyStorage, QuotaItem } from '../types';
 
-// Updated to the production API URL provided
-const API_BASE = "https://api-filemanager.kolab.top/api";
+// API base — relative path, proxied by Vite in dev, same-origin in production
+const API_BASE = "/api";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
@@ -251,7 +251,16 @@ export const deleteUser = async (id: string): Promise<void> => {
         headers: getAuthHeaders() as any,
     });
     return handleResponse(res);
-}
+};
+
+export const resetUserPassword = async (id: string, password: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/users/${id}/password`, {
+        method: 'PUT',
+        headers: getAuthHeaders() as any,
+        body: JSON.stringify({ password }),
+    });
+    return handleResponse(res);
+};
 
 export const updateProfile = async (username?: string, password?: string): Promise<void> => {
     const res = await fetch(`${API_BASE}/profile`, {
@@ -262,11 +271,11 @@ export const updateProfile = async (username?: string, password?: string): Promi
     return handleResponse(res);
 };
 
-export const sharePath = async (username: string, path: string, permissions: Permissions, quotaGB?: number): Promise<void> => {
+export const sharePath = async (username: string, path: string, permissions: Permissions, quotaGB?: number, serverId?: string): Promise<void> => {
     const res = await fetch(`${API_BASE}/share`, {
         method: 'POST',
         headers: getAuthHeaders() as any,
-        body: JSON.stringify({ username, path, permissions, quotaGB }),
+        body: JSON.stringify({ username, path, permissions, quotaGB, serverId }),
     });
     return handleResponse(res);
 };
@@ -322,3 +331,268 @@ export const downloadFileBlob = async (path: string, filename: string) => {
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+// ─── Server Management (Admin) ────────────────────────────────────────────────
+
+export interface ServerDefinition {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  enabled: boolean;
+  os_type: string;
+  conn_type: 'direct' | 'cloudflare';
+  tunnel_url?: string;
+  created_at: string;
+}
+
+export const getServers = async (): Promise<ServerDefinition[]> => {
+  const res = await fetch(`${API_BASE}/servers`, { headers: getAuthHeaders() });
+  return handleResponse(res);
+};
+
+export const createServer = async (data: {
+  name: string; username: string; password?: string; privateKey?: string; testConn?: boolean;
+  host?: string; port?: number;
+  connType?: 'direct' | 'cloudflare';
+  tunnelUrl?: string; cfTokenId?: string; cfTokenSecret?: string;
+}): Promise<{ success: boolean; id: string }> => {
+  const res = await fetch(`${API_BASE}/servers`, {
+    method: 'POST',
+    headers: getAuthHeaders() as any,
+    body: JSON.stringify(data),
+  });
+  return handleResponse(res);
+};
+
+export const updateServer = async (id: string, data: {
+  name?: string; host?: string; port?: number; username?: string;
+  password?: string; privateKey?: string; enabled?: boolean; testConn?: boolean;
+  connType?: 'direct' | 'cloudflare';
+  tunnelUrl?: string; cfTokenId?: string; cfTokenSecret?: string;
+}): Promise<void> => {
+  const res = await fetch(`${API_BASE}/servers/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders() as any,
+    body: JSON.stringify(data),
+  });
+  return handleResponse(res);
+};
+
+export const deleteServer = async (id: string): Promise<void> => {
+  const res = await fetch(`${API_BASE}/servers/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders() as any,
+  });
+  return handleResponse(res);
+};
+
+export const testServer = async (id: string): Promise<{ success: boolean; message: string }> => {
+  const res = await fetch(`${API_BASE}/servers/${id}/test`, {
+    method: 'POST',
+    headers: getAuthHeaders() as any,
+  });
+  return handleResponse(res);
+};
+
+export const detectServerOS = async (id: string): Promise<{ success: boolean; osType: string }> => {
+  const res = await fetch(`${API_BASE}/servers/${id}/detect-os`, {
+    method: 'POST',
+    headers: getAuthHeaders() as any,
+  });
+  return handleResponse(res);
+};
+
+export const createStorageDefinition = async (data: {
+  name: string; rootPath: string; serverId: string; quotaGB?: number;
+}): Promise<void> => {
+  const res = await fetch(`${API_BASE}/storages`, {
+    method: 'POST',
+    headers: getAuthHeaders() as any,
+    body: JSON.stringify(data),
+  });
+  return handleResponse(res);
+};
+
+export const deleteStorageDefinition = async (id: string): Promise<void> => {
+  const res = await fetch(`${API_BASE}/storages/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders() as any,
+  });
+  return handleResponse(res);
+};
+
+// ─── Git Integration ──────────────────────────────────────────────────────────
+
+export interface GitCommit {
+  hash: string;
+  shortHash: string;
+  author: string;
+  email: string;
+  relTime: string;
+  date: string;
+  subject: string;
+}
+
+export interface GitInfo {
+  isGitRepo: boolean;
+  branch?: string;
+  remoteName?: string;
+  remoteUrl?: string;
+  repoHost?: 'github' | 'gitlab' | 'bitbucket' | null;
+  repoSlug?: string;
+  repoWebUrl?: string;
+  lastCommit?: GitCommit;
+  changedFiles?: { status: string; file: string }[];
+  ahead?: number;
+  behind?: number;
+  stashCount?: number;
+  latestTag?: string;
+  isDirty?: boolean;
+  error?: string;
+}
+
+export const getGitInfo = async (path: string): Promise<GitInfo> => {
+  const res = await fetch(`${API_BASE}/git/info?path=${encodeURIComponent(path)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(res);
+};
+
+export const getGitLog = async (path: string, limit = 20): Promise<GitCommit[]> => {
+  const res = await fetch(`${API_BASE}/git/log?path=${encodeURIComponent(path)}&limit=${limit}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(res);
+};
+
+export const getGitBranches = async (path: string): Promise<{ local: string[]; remote: string[] }> => {
+  const res = await fetch(`${API_BASE}/git/branches?path=${encodeURIComponent(path)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(res);
+};
+
+export const gitPull = async (path: string, remote?: string, branch?: string): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/pull`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, remote, branch }),
+  });
+  return handleResponse(res);
+};
+
+export const gitPush = async (path: string, remote?: string, branch?: string, force?: boolean): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/push`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, remote, branch, force }),
+  });
+  return handleResponse(res);
+};
+
+export const gitFetch = async (path: string, remote?: string): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/fetch`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, remote }),
+  });
+  return handleResponse(res);
+};
+
+export const gitCheckout = async (path: string, branch: string): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/checkout`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, branch }),
+  });
+  return handleResponse(res);
+};
+
+export const gitStash = async (path: string, action: 'save' | 'pop' | 'list' | 'drop', message?: string): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/stash`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, action, message }),
+  });
+  return handleResponse(res);
+};
+
+export const getGitDiff = async (path: string, file?: string): Promise<{ output: string }> => {
+  const params = new URLSearchParams({ path });
+  if (file) params.append('file', file);
+  const res = await fetch(`${API_BASE}/git/diff?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(res);
+};
+
+export const gitCommit = async (path: string, message: string, addAll = true): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/commit`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, message, addAll }),
+  });
+  return handleResponse(res);
+};
+
+export const gitCreateBranch = async (path: string, branch: string, checkout = true): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/branch/create`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, branch, checkout }),
+  });
+  return handleResponse(res);
+};
+
+export const gitDeleteBranch = async (path: string, branch: string, force = false): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/branch`, {
+    method: 'DELETE', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, branch, force }),
+  });
+  return handleResponse(res);
+};
+
+export interface GitTag { name: string; date: string; message: string; }
+export const getGitTags = async (path: string): Promise<GitTag[]> => {
+  const res = await fetch(`${API_BASE}/git/tags?path=${encodeURIComponent(path)}`, { headers: getAuthHeaders() });
+  return handleResponse(res);
+};
+
+export const gitReset = async (path: string, mode: 'hard' | 'soft' | 'mixed' = 'hard', ref = 'HEAD'): Promise<{ output: string }> => {
+  const res = await fetch(`${API_BASE}/git/reset`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, mode, ref }),
+  });
+  return handleResponse(res);
+};
+
+export interface GitRemote { name: string; fetch: string; push: string; }
+export const getGitRemotes = async (path: string): Promise<GitRemote[]> => {
+  const res = await fetch(`${API_BASE}/git/remotes?path=${encodeURIComponent(path)}`, { headers: getAuthHeaders() });
+  return handleResponse(res);
+};
+
+// ─── Git Credentials (private repos) ──────────────────────────────────────────
+
+export interface GitCredentialStatus {
+  exists: boolean;
+  authType?: string;
+  username?: string;
+  hasToken?: boolean;
+}
+
+export const getGitCredentials = async (path: string): Promise<GitCredentialStatus> => {
+  const res = await fetch(`${API_BASE}/git/credentials?path=${encodeURIComponent(path)}`, { headers: getAuthHeaders() });
+  return handleResponse(res);
+};
+
+export const saveGitCredentials = async (path: string, data: {
+  authType?: string; username?: string; token: string;
+}): Promise<void> => {
+  const res = await fetch(`${API_BASE}/git/credentials`, {
+    method: 'POST', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path, ...data }),
+  });
+  return handleResponse(res);
+};
+
+export const deleteGitCredentials = async (path: string): Promise<void> => {
+  const res = await fetch(`${API_BASE}/git/credentials`, {
+    method: 'DELETE', headers: getAuthHeaders() as any,
+    body: JSON.stringify({ path }),
+  });
+  return handleResponse(res);
+};

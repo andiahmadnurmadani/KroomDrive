@@ -45,7 +45,11 @@ export const getFriendlyErrorMessage = (error: any): string => {
     if (lowerMsg.includes('413') || lowerMsg.includes('large')) {
         return "File Too Large: The file exceeds the upload limit.";
     }
-    if (lowerMsg.includes('network') || lowerMsg.includes('failed to fetch') || lowerMsg.includes('connection')) {
+    // Only show generic "check connection" for truly network-level errors, not detailed SSH/tunnel errors
+    if (
+        (lowerMsg.includes('network') || lowerMsg === 'failed to fetch') &&
+        !lowerMsg.includes('ssh') && !lowerMsg.includes('tunnel') && !lowerMsg.includes('websocket')
+    ) {
         return "Connection Error: Please check your internet connection.";
     }
     

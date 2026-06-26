@@ -6,6 +6,7 @@ import { ToastProvider, useToast } from './contexts/ToastContext';
 import { Sidebar } from './components/Layout/Sidebar';
 import { Header } from './components/Layout/Header';
 import { FileList } from './components/Files/FileList';
+import { GitPanel } from './components/Files/GitPanel';
 import { ContextMenu } from './components/Files/ContextMenu';
 import { LoginForm } from './components/Auth/LoginForm';
 import { Modal } from './components/Modal';
@@ -14,7 +15,7 @@ import { AdminDashboard } from './components/Admin/AdminDashboard';
 import { TrashView } from './components/Files/TrashView';
 import { FileItem } from './types';
 import * as api from './services/api';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, FolderX, RefreshCw, GitBranch } from 'lucide-react';
 
 const PathUtils = {
   getSeparator: (path: string) => {
@@ -46,7 +47,7 @@ interface ContextMenuState {
 }
 
 const FileManager: React.FC = () => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, loading: authLoading, user } = useAuth();
     const { 
         currentPath, 
         setCurrentPath, 
@@ -56,16 +57,49 @@ const FileManager: React.FC = () => {
         progress,
         activeJobId,
         loading,
+        loadingDrives,
         files,
+        assignedDrives,
         selectedPaths,
         setSelectedPaths,
         clearSelection,
-        selectAll
+        selectAll,
+        fetchDriveInfo,
     } = useFile();
     const { showToast, handleError } = useToast();
 
-    // App View State
+    // App View State — user without storage is locked to 'files' (shows no-access screen)
     const [appView, setAppView] = useState<'files' | 'admin' | 'trash'>('files');
+
+    // Derived: does this user have any storage assigned?
+    const isAdmin = user?.role === 'admin';
+    const hasStorage = isAdmin || assignedDrives.length > 0;
+    // Only show no-access screen after loading is done
+    const showNoAccess = !loadingDrives && !isAdmin && assignedDrives.length === 0;
+
+    // Sidebar collapse state
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    // Git panel state — now floating
+    const [gitPanelPath, setGitPanelPath] = useState<string | null>(null);
+    const [gitFolderPath, setGitFolderPath] = useState<string | null>(null);
+    const [gitPanelCollapsed, setGitPanelCollapsed] = useState(false);
+
+    // Auto-detect .git when current directory has it
+    useEffect(() => {
+        if (!currentPath || appView !== 'files') return;
+        const hasGitDir = files.some(f => f.name === '.git' && f.type === 'folder');
+        if (hasGitDir) {
+            setGitFolderPath(currentPath);
+            // Auto-open panel if entering a git repo (keep collapsed state)
+            setGitPanelPath(currentPath);
+        } else {
+            setGitFolderPath(null);
+            if (gitPanelPath && !currentPath.startsWith(gitPanelPath)) {
+                setGitPanelPath(null);
+                setGitPanelCollapsed(false);
+            }
+        }
+    }, [files, currentPath, appView]);
 
     // UI States
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -328,6 +362,17 @@ const FileManager: React.FC = () => {
 
     // --- Render ---
 
+    if (authLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#F4F7FE]">
+                <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-10 h-10 text-primary-600 animate-spin" />
+                    <span className="text-sm font-medium text-secondary">Loading...</span>
+                </div>
+            </div>
+        );
+    }
+
     if (!isAuthenticated) {
         return <LoginForm />;
     }
@@ -350,10 +395,12 @@ const FileManager: React.FC = () => {
             `}</style>
 
             <Sidebar 
-                onNavigateTrash={() => setAppView('trash')} 
-                onNavigateAdmin={() => setAppView('admin')} 
+                onNavigateTrash={() => isAdmin && setAppView('trash')} 
+                onNavigateAdmin={() => isAdmin && setAppView('admin')} 
                 onNavigateFiles={() => setAppView('files')}
                 currentView={appView}
+                collapsed={sidebarCollapsed}
+                onToggleCollapse={() => setSidebarCollapsed(c => !c)}
             />
 
             <main className="flex-1 flex flex-col min-w-0 bg-white rounded-[20px] shadow-soft relative overflow-hidden border border-gray-100">
@@ -392,10 +439,29 @@ const FileManager: React.FC = () => {
                    </div>
                 )}
 
-                {appView === 'admin' ? (
+                {/* ── View routing ── */}
+                {isAdmin && appView === 'admin' ? (
                     <AdminDashboard onBack={() => setAppView('files')} />
-                ) : appView === 'trash' ? (
+                ) : isAdmin && appView === 'trash' ? (
                     <TrashView onBack={() => setAppView('files')} />
+                ) : showNoAccess ? (
+                    /* ── No storage assigned — friendly waiting screen ── */
+                    <div className="flex-1 flex flex-col items-center justify-center p-10 text-center">
+                        <div className="w-24 h-24 bg-gray-50 rounded-3xl flex items-center justify-center mb-6 border border-gray-100">
+                            <FolderX size={40} className="text-gray-300" />
+                        </div>
+                        <h2 className="text-xl font-bold text-secondary mb-2">No storage assigned yet</h2>
+                        <p className="text-sm text-gray-400 max-w-sm leading-relaxed mb-8">
+                            Your account is active but no storage has been assigned to you. Contact your administrator to get access.
+                        </p>
+                        <button
+                            onClick={() => fetchDriveInfo()}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-bold rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all"
+                        >
+                            <RefreshCw size={16} className={loadingDrives ? 'animate-spin' : ''} />
+                            Check again
+                        </button>
+                    </div>
                 ) : (
                     <>
                         <Header 
@@ -407,12 +473,46 @@ const FileManager: React.FC = () => {
                             pasteLoading={pasteLoading}
                         />
 
-                        <div className="flex-1 overflow-y-auto p-6 relative custom-scrollbar bg-gray-50/30">
-                            <FileList 
-                                onContextMenu={handleContextMenu}
-                                onNavigate={setCurrentPath}
-                            />
+                        <div className="flex flex-1 overflow-hidden">
+                            {/* File list — always full width now, git panel is floating */}
+                            <div className="flex-1 overflow-y-auto p-6 relative custom-scrollbar bg-gray-50/30">
+                                <FileList 
+                                    onContextMenu={handleContextMenu}
+                                    onNavigate={setCurrentPath}
+                                />
+
+                                {/* Git re-open button */}
+                                {gitFolderPath && !gitPanelPath && (
+                                    <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+                                        <button
+                                            onClick={() => { setGitPanelPath(gitFolderPath); setGitPanelCollapsed(false); }}
+                                            className="flex items-center gap-2 pl-3 pr-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl shadow-xl shadow-black/20 transition-all hover:scale-105 active:scale-100 border border-white/10"
+                                        >
+                                            <div className="w-5 h-5 bg-white/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                                                <GitBranch size={12} />
+                                            </div>
+                                            <span>Open Git Panel</span>
+                                            <span className="text-white/40 font-mono text-[10px]">
+                                                {gitFolderPath.includes('srv:') 
+                                                    ? gitFolderPath.slice(41).split('/').filter(Boolean).pop() || '/'
+                                                    : gitFolderPath.split(/[/\\]/).filter(Boolean).pop()
+                                                }
+                                            </span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
+
+                        {/* Floating Git Panel */}
+                        {gitPanelPath && (
+                            <GitPanel
+                                folderPath={gitPanelPath}
+                                collapsed={gitPanelCollapsed}
+                                onToggleCollapse={() => setGitPanelCollapsed(c => !c)}
+                                onClose={() => { setGitPanelPath(null); setGitPanelCollapsed(false); }}
+                            />
+                        )}
                     </>
                 )}
 
@@ -429,6 +529,8 @@ const FileManager: React.FC = () => {
                         onCut={() => handleCut(contextMenu.item!)}
                         onCopyPath={handleCopyPath}
                         onPaste={handlePaste}
+                        onOpenGit={gitFolderPath ? () => setGitPanelPath(gitFolderPath) : undefined}
+                        isGitRepo={!!gitFolderPath}
                     />
                 )}
             </main>

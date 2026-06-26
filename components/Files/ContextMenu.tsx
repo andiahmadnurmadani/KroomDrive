@@ -3,7 +3,7 @@ import React, { useRef, useEffect } from 'react';
 import { 
   Download, Copy, Scissors, Edit2, Trash2, Info, 
   ExternalLink, FolderPlus, ClipboardCheck, CheckCircle2,
-  FileArchive, Link
+  FileArchive, Link, GitBranch
 } from 'lucide-react';
 import { FileItem } from '../../types';
 import { useFile } from '../../contexts/FileContext';
@@ -28,6 +28,8 @@ interface ContextMenuProps {
     onCut: (item: FileItem) => void;
     onCopyPath: (item: FileItem) => void;
     onPaste: () => void;
+    onOpenGit?: () => void;
+    isGitRepo?: boolean;
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({ 
@@ -41,7 +43,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     onCopy,
     onCut,
     onCopyPath,
-    onPaste
+    onPaste,
+    onOpenGit,
+    isGitRepo,
 }) => {
     const { clipboard, refreshFiles, currentPath, extractFile, selectedPaths } = useFile();
     const { showToast, handleError } = useToast();
@@ -194,6 +198,19 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               >
                 <CheckCircle2 size={16} /> Refresh
               </button>
+
+              {isGitRepo && onOpenGit && (
+                <>
+                  <div className="my-1 border-t border-gray-100"></div>
+                  <button
+                    onClick={() => { onOpenGit(); onClose(); }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50 hover:text-gray-800 flex items-center gap-2 transition-colors font-medium text-gray-700"
+                  >
+                    <GitBranch size={16} className="text-gray-500" />
+                    Open Git Panel
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>

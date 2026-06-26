@@ -20,6 +20,7 @@ interface FileContextType {
   files: FileItem[];
   viewMode: ViewMode;
   loading: boolean;
+  loadingDrives: boolean;
   error: string | null;
   searchQuery: string;
   storageStats: StorageInfo[];
@@ -59,6 +60,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [files, setFiles] = useState<FileItem[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [loading, setLoading] = useState(false);
+  const [loadingDrives, setLoadingDrives] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [storageStats, setStorageStats] = useState<StorageInfo[]>([]);
@@ -74,18 +76,39 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [shouldRefresh, setShouldRefresh] = useState(false);
   
   const activeJobId = useRef<string | null>(null);
+  // Track previous user ID to detect account switch
+  const prevUserId = useRef<string | null>(null);
+
+  // Reset all file state when user changes (logout → re-login as different user)
+  useEffect(() => {
+    const currentUserId = user?._id || null;
+    if (prevUserId.current !== null && prevUserId.current !== currentUserId) {
+      // User switched — wipe everything so previous user's path is not carried over
+      setCurrentPath('');
+      setFiles([]);
+      setSearchQuery('');
+      setStorageStats([]);
+      setAssignedDrives([]);
+      setClipboard(null);
+      setProgress(null);
+      setSelectedPaths([]);
+      setError(null);
+      lastSelectedPath.current = null;
+      activeJobId.current = null;
+    }
+    prevUserId.current = currentUserId;
+  }, [user?._id]);
 
   // Initial Path Logic
   useEffect(() => {
     if (isAuthenticated) {
         fetchDriveInfo().then(() => {
-            if (!currentPath) {
-                // If we have assigned drives, use the first one
-                api.getAssignedDrives().then(drives => {
+            // Always reset to the correct root for the current user
+            // (currentPath may still hold a stale value from a previous user if reset hasn't propagated)
+            api.getAssignedDrives().then(drives => {
                     if (drives.length > 0) {
                         setCurrentPath(drives[0].drive);
                     } else {
-                        // If no assigned drives, try storage stats (admin/fallback)
                         api.getStorageInfo().then(stats => {
                             if (stats.length > 0) {
                                 const firstDrive = stats[0].drive.includes('\\') || stats[0].drive.includes('/') 
@@ -96,10 +119,9 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         });
                     }
                 });
-            }
         });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?._id]);
 
   // Handle auto-refresh triggered by sockets
   useEffect(() => {
@@ -111,7 +133,28 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Socket IO
   useEffect(() => {
-    const socket = io("https://api-filemanager.kolab.top"); 
+    const token = localStorage.getItem('token');
+    const socket = io("/", {
+      path: "/socket.io",
+      auth: { token: token || '' },  // backend uses this to join user-specific room
+      reconnectionAttempts: 3,
+      reconnectionDelay: 5000,
+      timeout: 10000,
+      transports: ['websocket'],
+    });
+
+    socket.on("connect_error", (err) => {
+      console.warn("Socket.IO connection failed (real-time updates disabled):", err.message);
+    });
+
+    socket.on("connect_failed", () => {
+      console.warn("Socket.IO connection failed after max retries.");
+    });
+
+    // SERVER CHANGE HANDLERS — auto-refresh sidebar when admin adds/removes servers
+    socket.on("server-updated", () => {
+      fetchDriveInfo();
+    });
 
     // DELETE HANDLERS
     socket.on("delete-progress", (data: any) => {
@@ -178,6 +221,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const fetchDriveInfo = async () => {
+    setLoadingDrives(true);
     try {
         const [storageResult, assignedResult] = await Promise.allSettled([
             api.getStorageInfo(),
@@ -199,6 +243,8 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     } catch (e) {
         console.error("Critical error in fetchDriveInfo", e);
+    } finally {
+        setLoadingDrives(false);
     }
   };
 
@@ -372,6 +418,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
       files,
       viewMode,
       loading,
+      loadingDrives,
       error,
       searchQuery,
       storageStats,

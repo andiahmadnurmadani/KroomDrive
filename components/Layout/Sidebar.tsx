@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Trash2, LogOut, ShieldCheck, Database, HardDrive, Cloud, Folder, PieChart, Loader2, Lock, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Trash2, LogOut, ShieldCheck, Database, HardDrive, Cloud, Folder, PieChart, Loader2, Lock, ChevronRight, AlertTriangle, Server, RefreshCw, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFile } from '../../contexts/FileContext';
 import { formatSize } from '../../utils/formatters';
@@ -13,6 +13,8 @@ interface SidebarProps {
   onNavigateAdmin: () => void;
   onNavigateFiles: () => void;
   currentView: 'files' | 'admin' | 'trash';
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 // Skeleton Component for Loading State
@@ -40,12 +42,12 @@ const StorageSkeleton = () => (
   </div>
 );
 
-export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdmin, onNavigateFiles, currentView }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdmin, onNavigateFiles, currentView, collapsed, onToggleCollapse }) => {
   const { user, logout } = useAuth();
-  const { currentPath, setCurrentPath, storageStats, assignedDrives, files } = useFile(); 
+  const { currentPath, setCurrentPath, storageStats, assignedDrives, files, fetchDriveInfo, loadingDrives } = useFile();
   
-  // Storage Stats State
-  const [loadingStats, setLoadingStats] = useState<boolean>(true); // Default to true for initial load
+  // Storage Stats State — derive from context loadingDrives
+  const [loadingStats, setLoadingStats] = useState<boolean>(true);
   
   // Admin Data
   const [adminStorageStats, setAdminStorageStats] = useState(storageStats);
@@ -58,19 +60,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
     if (!user) return;
 
     if (user.role === 'admin') {
-        // Admin uses the global storage info provided by FileContext/physical disk scan
         setAdminStorageStats(storageStats);
-        // If storageStats is empty, we might still be loading in Context, but mostly we assume ready if context loaded
-        // For smoother UX, we can check if context has data
-        if (storageStats.length > 0) setLoadingStats(false);
-        else {
-             // If empty, maybe context is still fetching? 
-             // We'll set timeout to disable loader if it stays empty (e.g. really no drives)
-             const timer = setTimeout(() => setLoadingStats(false), 1000);
-             return () => clearTimeout(timer);
+        // Sync loading state with context's loadingDrives
+        if (loadingDrives) {
+            setLoadingStats(true);
+        } else {
+            setLoadingStats(false);
         }
     } else {
-        // User uses the specific quota endpoint which respects the assigned size
+        if (loadingDrives) {
+            setLoadingStats(true);
+            return;
+        }
+        // User: fetch quotas independently
         const fetchUserQuota = async () => {
             setLoadingStats(true);
             try {
@@ -84,53 +86,64 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
         };
         fetchUserQuota();
     }
-  }, [user, storageStats, files, assignedDrives]); 
+  }, [user, storageStats, assignedDrives, loadingDrives]);
 
   // Construct display list for Navigation
   const getDisplayItems = () => {
-      // 1. Admin View: Physical Disks
-      if (user?.role === 'admin' && adminStorageStats.length > 0) {
-          return adminStorageStats.map(s => {
-              let safePath = s.drive;
-              if (!safePath.endsWith('\\') && !safePath.endsWith('/') && safePath.includes(':')) {
-                  safePath += '\\';
-              }
+      // 1. Admin View: One entry per SSH server (showing root "/")
+      if (user?.role === 'admin') {
+          // Use assignedDrives which for admin = one entry per server
+          if (assignedDrives.length > 0) {
+              return assignedDrives.map((d: any) => {
+                  // Find matching storage stats for disk usage
+                  const matchingStat = adminStorageStats.find(s =>
+                      s.drive.includes(d.serverHost || '')
+                  );
+                  const used = matchingStat ? matchingStat.used : 0;
+                  const total = matchingStat ? matchingStat.total : 0;
+                  const free = matchingStat ? matchingStat.free : 0;
+                  const percent = total > 0 ? (used / total) * 100 : 0;
 
-              // Calculate usage for this specific disk
-              const used = s.total - s.free;
-              const percent = s.total > 0 ? (used / s.total) * 100 : 0;
-
-              return {
-                  name: s.drive, // Just the drive letter
-                  path: safePath,
-                  type: 'disk',
-                  permissions: { read: true, write: true, delete: true },
-                  stats: {
-                      used,
-                      free: s.free,
-                      total: s.total,
-                      percent,
-                      isUnlimited: false
-                  }
-              };
-          });
+                  return {
+                      name: d.serverName || d.serverHost || 'Server',
+                      subLabel: d.serverHost,
+                      path: d.drive,   // e.g. srv:<uuid>:/
+                      type: 'server',
+                      permissions: d.permissions,
+                      stats: { used, free, total, percent, isUnlimited: total === 0 }
+                  };
+              });
+          }
+          // Fallback: show storageStats-based entries if no assignedDrives yet
+          if (adminStorageStats.length > 0) {
+              return adminStorageStats.map(s => {
+                  const used = s.total - s.free;
+                  const percent = s.total > 0 ? (used / s.total) * 100 : 0;
+                  return {
+                      name: s.drive,
+                      subLabel: undefined,
+                      path: s.drive,
+                      type: 'disk',
+                      permissions: { read: true, write: true, delete: true },
+                      stats: { used, free: s.free, total: s.total, percent, isUnlimited: false }
+                  };
+              });
+          }
+          return [];
       }
 
       // 2. User View: Quotas from API
       if (userQuotas.length > 0) {
           return userQuotas.map(q => {
-              // Match with assigned drives to get permissions
-              // Note: Quota path comes from backend, might need normalization to match assignedDrives if logic varies
               const assigned = assignedDrives.find(ad => ad.drive === q.path);
               const name = assigned?.drive.split(/[\\/]/).filter(Boolean).pop() || q.path;
-              
               const isUnlimited = q.quota === null;
               const total = q.quota || 0;
               const used = q.used;
               const percent = q.percent || 0;
-
               return {
-                  name: name,
+                  name,
+                  subLabel: undefined,
                   path: q.path,
                   type: 'folder',
                   permissions: assigned?.permissions || { read: true, write: false, delete: false },
@@ -214,14 +227,99 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
   // Helper to get background bar color when active/inactive
   const getProgressBg = (isActive: boolean, percent: number) => {
       if (isActive) {
-          if (percent >= 90) return 'bg-red-200';
-          return 'bg-black/20';
+          if (percent >= 90) return 'bg-white/20';
+          return 'bg-white/20';
       }
       return 'bg-gray-100';
   }
 
+  // ── Collapsed mode ─────────────────────────────────────────────────────────
+  if (collapsed) {
+    return (
+      <aside className="w-16 bg-white flex flex-col flex-shrink-0 z-20 h-full shadow-soft m-4 rounded-[20px] overflow-hidden border border-gray-100 transition-all duration-200 ease-in-out">
+        {/* Logo */}
+        <div className="flex items-center justify-center pt-5 pb-3">
+          <KroomLogo className="w-8 h-8 text-primary-600" />
+        </div>
+
+        {/* Nav items — icon only */}
+        <div className="flex-1 overflow-y-auto flex flex-col items-center py-2 gap-1.5 scrollbar-hide">
+          {navItems.map((item, i) => {
+            let isActive = false;
+            if (currentView === 'files') {
+              if (item.path.startsWith('srv:') && currentPath.startsWith('srv:')) {
+                isActive = item.path.slice(4, 40) === currentPath.slice(4, 40);
+              } else {
+                const itemRoot = item.path.endsWith('\\') || item.path.endsWith('/') ? item.path : item.path + (item.path.includes('/') ? '/' : '\\');
+                const currRoot = currentPath.endsWith('\\') || currentPath.endsWith('/') ? currentPath : currentPath + (currentPath.includes('/') ? '/' : '\\');
+                isActive = currRoot.startsWith(itemRoot);
+              }
+            }
+            return (
+              <button
+                key={`${item.path}-${i}`}
+                title={(item.name) + (item.subLabel ? `\n${item.subLabel}` : '')}
+                onClick={() => { setCurrentPath(item.path); onNavigateFiles(); }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                  isActive ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/30' : 'text-gray-400 hover:bg-gray-100 hover:text-primary-600'
+                }`}
+              >
+                {item.type === 'disk' ? <HardDrive size={18} />
+                  : item.type === 'server' ? <Server size={18} />
+                  : <Folder size={18} />}
+              </button>
+            );
+          })}
+
+          {/* Divider */}
+          {user?.role === 'admin' && navItems.length > 0 && <div className="w-6 h-px bg-gray-100 my-1" />}
+
+          {/* Admin tools */}
+          {user?.role === 'admin' && (
+            <>
+              <button
+                title="Recycle Bin"
+                onClick={onNavigateTrash}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${currentView === 'trash' ? 'bg-red-50 text-red-500' : 'text-gray-400 hover:bg-gray-100 hover:text-red-500'}`}
+              >
+                <Trash2 size={18} />
+              </button>
+              <button
+                title="Admin Console"
+                onClick={onNavigateAdmin}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${currentView === 'admin' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:bg-gray-100 hover:text-indigo-600'}`}
+              >
+                <ShieldCheck size={18} />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Bottom: avatar + toggle */}
+        <div className="flex flex-col items-center gap-2 p-3">
+          {/* User avatar */}
+          <div
+            title={`${user?.username} · ${user?.role}`}
+            className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm border border-indigo-100"
+          >
+            {(user?.username || 'U').charAt(0).toUpperCase()}
+          </div>
+          {/* Expand button */}
+          <button
+            onClick={onToggleCollapse}
+            title="Expand sidebar"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+          >
+            <PanelLeftOpen size={16} />
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  // ── Expanded mode ───────────────────────────────────────────────────────────
   return (
-    <aside className="w-[280px] bg-white flex flex-col flex-shrink-0 z-20 h-full shadow-soft m-4 rounded-[20px] overflow-hidden border border-gray-100">
+    <aside className="w-[280px] bg-white flex flex-col flex-shrink-0 z-20 h-full shadow-soft m-4 rounded-[20px] overflow-hidden border border-gray-100 transition-all duration-200 ease-in-out">
         {/* Brand */}
         <div className="p-8 flex items-center justify-center">
             <KroomLogo className="w-16 h-16 text-primary-600" />
@@ -232,24 +330,60 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
             
             {/* Main Menu */}
             <div>
-                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">My Storage</p>
+                <div className="flex items-center justify-between px-4 mb-3">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        {user?.role === 'admin' ? 'SSH Servers' : 'My Storage'}
+                    </p>
+                    <button
+                        onClick={() => fetchDriveInfo()}
+                        disabled={loadingDrives}
+                        title="Reload"
+                        className="p-1 text-gray-300 hover:text-primary-500 hover:bg-primary-50 rounded-lg transition-colors disabled:cursor-not-allowed"
+                    >
+                        <RefreshCw
+                            size={13}
+                            className={loadingDrives ? 'animate-spin text-primary-400' : ''}
+                        />
+                    </button>
+                </div>
                 <div className="space-y-3">
                      {loadingStats ? (
                          <>
                             <StorageSkeleton />
                             <StorageSkeleton />
-                            <StorageSkeleton />
                          </>
                      ) : (
                          <>
-                             {navItems.length === 0 && (
-                                 <div className="px-4 py-2 text-sm text-gray-400 italic">No storage assigned</div>
+                             {navItems.length === 0 && user?.role !== 'admin' && (
+                                 <div className="mx-1 p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                                     <p className="text-xs font-bold text-amber-700 mb-1">No storage assigned</p>
+                                     <p className="text-[11px] text-amber-600/80 leading-relaxed">
+                                         Contact your admin to get access to a folder.
+                                     </p>
+                                 </div>
+                             )}
+                             {navItems.length === 0 && user?.role === 'admin' && (
+                                 <div className="mx-1 p-4 rounded-2xl bg-gray-50 border border-dashed border-gray-200">
+                                     <p className="text-xs font-bold text-gray-500 mb-1">No servers yet</p>
+                                     <p className="text-[11px] text-gray-400 leading-relaxed">
+                                         Add a server in Admin Console → Servers & Storage.
+                                     </p>
+                                 </div>
                              )}
 
-                             {navItems.map((item, i) => {
-                                     const itemRoot = item.path.endsWith('\\') || item.path.endsWith('/') ? item.path : item.path + (item.path.includes('/') ? '/' : '\\');
-                                     const currRoot = currentPath.endsWith('\\') || currentPath.endsWith('/') ? currentPath : currentPath + (currentPath.includes('/') ? '/' : '\\');
-                                     const isActive = currentView === 'files' && currRoot.startsWith(itemRoot);
+                     {navItems.map((item, i) => {
+                                     // Active check: srv: paths match by serverId prefix
+                                     let isActive = false;
+                                     if (currentView === 'files') {
+                                         if (item.path.startsWith('srv:') && currentPath.startsWith('srv:')) {
+                                             // same server = same serverId (chars 4..40)
+                                             isActive = item.path.slice(4, 40) === currentPath.slice(4, 40);
+                                         } else {
+                                             const itemRoot = item.path.endsWith('\\') || item.path.endsWith('/') ? item.path : item.path + (item.path.includes('/') ? '/' : '\\');
+                                             const currRoot = currentPath.endsWith('\\') || currentPath.endsWith('/') ? currentPath : currentPath + (currentPath.includes('/') ? '/' : '\\');
+                                             isActive = currRoot.startsWith(itemRoot);
+                                         }
+                                     }
 
                                      const isFull = !item.stats.isUnlimited && item.stats.percent >= 100;
                                      const isNearFull = !item.stats.isUnlimited && item.stats.percent >= 90;
@@ -277,12 +411,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
                                                             <div className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${isActive ? 'bg-white/20 text-white' : 'bg-gray-50 text-primary-600 group-hover:bg-primary-50'}`}>
                                                                 {item.type === 'disk' ? (
                                                                     <HardDrive size={16} strokeWidth={2.5} />
+                                                                ) : item.type === 'server' ? (
+                                                                    <Server size={16} strokeWidth={2.5} />
                                                                 ) : (
                                                                     <Folder size={16} strokeWidth={2.5} />
                                                                 )}
                                                             </div>
-                                                            <div className={`font-bold text-sm leading-tight truncate ${isActive ? 'text-white' : 'text-gray-800'}`}>
-                                                                {item.name}
+                                                            <div className="min-w-0">
+                                                                <div className={`font-bold text-sm leading-tight truncate ${isActive ? 'text-white' : 'text-gray-800'}`}>
+                                                                    {item.name}
+                                                                </div>
+                                                                {(item as any).subLabel && (
+                                                                    <div className={`text-[10px] font-mono truncate ${isActive ? 'text-white/70' : 'text-gray-400'}`}>
+                                                                        {(item as any).subLabel}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         
@@ -333,7 +476,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
                                                                 <div 
                                                                     className={`h-full rounded-full transition-all duration-500 ease-out ${
                                                                         isActive 
-                                                                            ? (isFull ? 'bg-white' : isNearFull ? 'bg-yellow-300' : 'bg-white') 
+                                                                            ? (isFull ? 'bg-red-300' : isNearFull ? 'bg-orange-300' : 'bg-white/90') 
                                                                             : getProgressColor(item.stats.percent)
                                                                     }`}
                                                                     style={{ width: `${Math.min(item.stats.percent, 100)}%` }}
@@ -401,7 +544,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
 
         {/* Storage Widget & Profile */}
         <div className="p-4 mt-auto">
-            {/* Storage Usage Card (Aggregated) */}
+            {/* Storage Usage Card — hide for users with no storage */}
+            {(user?.role === 'admin' || userQuotas.length > 0) && (
             <div className={`rounded-2xl p-5 text-white shadow-lg mb-4 relative overflow-hidden group transition-colors duration-500 ${
                 userStats && !userStats.isUnlimited && userStats.percent >= 90
                 ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/30'
@@ -494,8 +638,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
                     ) : null}
                 </div>
             </div>
+            )} {/* end storage widget conditional */}
 
             {/* Profile */}
+            {/* Profile + collapse toggle */}
             <div className="flex items-center gap-3 px-2">
                 <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm border border-indigo-100 shadow-sm ring-2 ring-white">
                     {(user?.username || 'U').charAt(0).toUpperCase()}
@@ -510,6 +656,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigateTrash, onNavigateAdm
                     title="Logout"
                 >
                     <LogOut size={18} />
+                </button>
+                <button
+                    onClick={onToggleCollapse}
+                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                    title="Collapse sidebar"
+                >
+                    <PanelLeftClose size={18} />
                 </button>
             </div>
         </div>

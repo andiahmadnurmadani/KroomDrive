@@ -63,6 +63,10 @@ export interface MyStorage {
 export interface AssignedDrive {
   drive: string;
   permissions: Permissions;
+  serverId?: string;
+  serverName?: string;
+  serverHost?: string;
+  isServerRoot?: boolean;
 }
 
 export interface QuotaItem {

@@ -5,155 +5,20 @@ import {
     CheckCircle2, FolderInput,
     ArrowLeft, UserPlus, Search, UserX, X, AlertTriangle, PieChart,
     ChevronRight, Folder, Loader2, ExternalLink,
-    Edit2, Cloud, ChevronDown
+    Edit2, Cloud, ChevronDown, Server, KeyRound, Eye, EyeOff,
+    XCircle, ChevronLeft, ChevronsLeft, ChevronsRight,
+    ChevronRight as ChevronRight2,
 } from 'lucide-react';
 import * as api from '../../services/api';
 import { User, StorageDefinition, Permissions, FileItem } from '../../types';
 import { formatSize } from '../../utils/formatters';
 import { useToast } from '../../contexts/ToastContext';
+import { ServerManager } from './ServerManager';
+import { GrantAccessModal } from './GrantAccessModal';
 
 interface AdminDashboardProps {
     onBack: () => void;
 }
-
-// --- INTERNAL COMPONENT: FOLDER PICKER ---
-const FolderPicker: React.FC<{ onSelect: (path: string) => void }> = ({ onSelect }) => {
-    const [drives, setDrives] = useState<string[]>([]);
-    const [currentPath, setCurrentPath] = useState<string>('');
-    const [folders, setFolders] = useState<FileItem[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [selectedPath, setSelectedPath] = useState('');
-
-    useEffect(() => {
-        // Load drives initially
-        api.getStorageInfo().then(stats => {
-            const drvs = stats.map(s => s.drive.includes('\\') || s.drive.includes('/') ? s.drive : s.drive + '\\');
-            setDrives(drvs);
-            if (drvs.length > 0) handleBrowse(drvs[0]);
-        });
-    }, []);
-
-    const handleBrowse = async (path: string) => {
-        setLoading(true);
-        setCurrentPath(path);
-        try {
-            const list = await api.getList(path);
-            // Only show folders in picker
-            setFolders(list.filter(i => i.type === 'folder'));
-        } catch (e) {
-            console.error("Failed to load path", e);
-            setFolders([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleFolderClick = (folderName: string) => {
-        const separator = currentPath.includes('\\') ? '\\' : '/';
-        const newPath = currentPath.endsWith(separator) 
-            ? `${currentPath}${folderName}` 
-            : `${currentPath}${separator}${folderName}`;
-        handleBrowse(newPath);
-    };
-
-    const handleBack = () => {
-        const separator = currentPath.includes('\\') ? '\\' : '/';
-        // Check if root
-        if (drives.includes(currentPath) || drives.includes(currentPath + separator)) return;
-        
-        const parts = currentPath.split(separator).filter(Boolean);
-        parts.pop();
-        let parent = parts.join(separator);
-        
-        // Fix drive root format (e.g. "C:" -> "C:\")
-        if (parent.endsWith(':')) parent += separator;
-        if (!parent) parent = drives[0];
-
-        handleBrowse(parent);
-    };
-
-    const handleSelectCurrent = (path: string) => {
-        setSelectedPath(path);
-        onSelect(path);
-    };
-
-    return (
-        <div className="border border-gray-200 rounded-xl overflow-hidden bg-white flex flex-col h-[280px]">
-            {/* Header: Drives & Nav */}
-            <div className="bg-gray-50 border-b border-gray-200 p-2 flex flex-col gap-2">
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-                    {drives.map(d => (
-                        <button 
-                            key={d}
-                            onClick={() => handleBrowse(d)}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all flex-shrink-0 flex items-center gap-1.5 ${currentPath.startsWith(d) ? 'bg-primary-600 text-white border-primary-600 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                        >
-                            <HardDrive size={12} /> {d}
-                        </button>
-                    ))}
-                </div>
-                <div className="flex items-center gap-2 px-1">
-                     <button 
-                        onClick={handleBack}
-                        disabled={drives.some(d => currentPath === d || currentPath === d.replace(/\\$/, ''))}
-                        className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg disabled:opacity-30"
-                     >
-                        <ArrowLeft size={14} />
-                     </button>
-                     <div className="flex-1 bg-white border border-gray-200 rounded-md px-2 py-1 text-xs font-mono text-gray-600 truncate flex items-center gap-2">
-                        <Folder size={12} className="text-primary-500" />
-                        {currentPath}
-                     </div>
-                </div>
-            </div>
-
-            {/* List */}
-            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
-                        <Loader2 className="animate-spin text-primary-500" />
-                        <span className="text-xs">Loading folders...</span>
-                    </div>
-                ) : (
-                    <div className="space-y-1">
-                        {/* Option to select current folder */}
-                        <button
-                            onClick={() => handleSelectCurrent(currentPath)}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all mb-2 ${selectedPath === currentPath ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-500' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
-                        >
-                            <CheckCircle2 size={14} className={selectedPath === currentPath ? 'text-primary-600' : 'text-gray-400'} />
-                            Select Current Folder: <span className="font-mono ml-1">{currentPath}</span>
-                        </button>
-
-                        <div className="border-t border-gray-100 my-2"></div>
-
-                        {folders.length === 0 ? (
-                            <div className="text-center py-8 text-gray-400 text-xs italic">No subfolders found</div>
-                        ) : (
-                            folders.map(f => (
-                                <div key={f.path} className="flex items-center gap-1 group">
-                                    <button
-                                        onClick={() => handleSelectCurrent(f.path)}
-                                        className={`flex-1 text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition-all ${selectedPath === f.path ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
-                                    >
-                                        <Folder size={16} className={`transition-colors ${selectedPath === f.path ? 'fill-indigo-200 text-indigo-600' : 'fill-gray-50 text-gray-400 group-hover:text-primary-500'}`} />
-                                        <span className="truncate">{f.name}</span>
-                                    </button>
-                                    <button 
-                                        onClick={() => handleFolderClick(f.name)}
-                                        className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
-                                    >
-                                        <ChevronRight size={16} />
-                                    </button>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
 
 // --- DELETE MODAL ---
 const DeleteConfirmModal: React.FC<{
@@ -505,8 +370,159 @@ const UserDetailsModal: React.FC<{
     );
 }
 
+// --- RESET PASSWORD MODAL ---
+const ResetPasswordModal: React.FC<{
+    user: User | null;
+    onClose: () => void;
+}> = ({ user, onClose }) => {
+    const { showToast, handleError } = useToast();
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    if (!user) return null;
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (password.length < 4) {
+            setError('Password must be at least 4 characters.');
+            return;
+        }
+        if (password !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+        setLoading(true);
+        try {
+            await api.resetUserPassword(user._id, password);
+            showToast(`Password reset for @${user.username}`, 'success');
+            onClose();
+        } catch (e: any) {
+            handleError(e);
+            setError(e.message || 'Failed to reset password.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div
+            className="fixed inset-0 z-[80] bg-[#2B3674]/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={onClose}
+        >
+            <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-amber-50 rounded-full flex items-center justify-center">
+                            <KeyRound size={18} className="text-amber-500" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-gray-800 text-sm">Reset Password</h3>
+                            <p className="text-xs text-gray-400">@{user.username}</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    {/* New Password */}
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">New Password</label>
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                className="w-full px-4 py-2 pr-10 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                                placeholder="Min. 4 characters"
+                                required
+                                autoFocus
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(p => !p)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                tabIndex={-1}
+                            >
+                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Confirm Password */}
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Confirm Password</label>
+                        <div className="relative">
+                            <input
+                                type={showConfirm ? 'text' : 'password'}
+                                value={confirmPassword}
+                                onChange={e => setConfirmPassword(e.target.value)}
+                                className="w-full px-4 py-2 pr-10 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                                placeholder="Repeat password"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirm(p => !p)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                tabIndex={-1}
+                            >
+                                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Validation error */}
+                    {error && (
+                        <p className="text-xs text-red-500 font-medium flex items-center gap-1.5">
+                            <AlertTriangle size={12} /> {error}
+                        </p>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-1">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={loading}
+                            className="flex-1 py-2.5 text-gray-600 font-bold hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50 text-sm"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="flex-1 py-2.5 bg-amber-500 text-white font-bold hover:bg-amber-600 rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm"
+                        >
+                            {loading && <Loader2 size={14} className="animate-spin" />}
+                            Reset Password
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const { showToast, handleError } = useToast();
+    // Tab State
+    const [activeTab, setActiveTab] = useState<'users' | 'servers'>('users');
+
     // Data States
     const [users, setUsers] = useState<User[]>([]);
     const [storages, setStorages] = useState<StorageDefinition[]>([]);
@@ -521,22 +537,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const [viewingUser, setViewingUser] = useState<User | null>(null);
     const [loadingUserDetails, setLoadingUserDetails] = useState(false);
 
-    // Assign Storage State
-    const [assigningUser, setAssigningUser] = useState<User | null>(null);
-    
-    // Custom Path State
-    const [assignPath, setAssignPath] = useState('');
-    const [assignQuota, setAssignQuota] = useState(''); 
+    // Grant Access Modal State (replaces old assigningUser + FolderPicker)
+    const [grantAccessUser, setGrantAccessUser] = useState<User | null>(null);
 
-    const [assignPerms, setAssignPerms] = useState<Permissions>({ read: true, write: true, delete: false });
-    
     // Action Loading
     const [createLoading, setCreateLoading] = useState(false);
-    const [assignLoading, setAssignLoading] = useState(false);
 
     // Delete Modal State
     const [deleteData, setDeleteData] = useState<{ type: 'user' | 'storage', id: string, name: string } | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
+
+    // Pagination & display settings
+    const [pageSize, setPageSize] = useState(6);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [searchUser, setSearchUser] = useState('');
+    const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
+
+    // Reset Password Modal State (kept here for context grouping)
+    const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
+
+    // Derived: filtered + paginated users
+    const filteredUsers = users.filter(u => {
+        const matchSearch = !searchUser || u.username.toLowerCase().includes(searchUser.toLowerCase());
+        const matchRole = roleFilter === 'all' || u.role === roleFilter;
+        return matchSearch && matchRole;
+    });
+    const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+    const pagedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+    const handleSearchUser = (val: string) => { setSearchUser(val); setCurrentPage(1); };
+    const handleRoleFilter = (val: 'all' | 'admin' | 'user') => { setRoleFilter(val); setCurrentPage(1); };
+    const handlePageSize = (val: number) => { setPageSize(val); setCurrentPage(1); };
 
     useEffect(() => {
         loadData();
@@ -600,29 +631,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     }
 
     const handleAssignStorage = async () => {
-        if (!assigningUser || !assignPath) return;
-        setAssignLoading(true);
-        try {
-            // Always use sharePath for direct assignment
-            await api.sharePath(assigningUser.username, assignPath, assignPerms, assignQuota ? Number(assignQuota) : undefined);
-            showToast(`Storage assigned to ${assigningUser.username}`, 'success');
-            
-            // Refresh logic
-            if (viewingUser && viewingUser._id === assigningUser._id) {
-                refreshViewingUser();
-            } else {
-                loadData();
-            }
-
-            setAssigningUser(null);
-            setAssignPath('');
-            setAssignQuota('');
-        } catch (e: any) {
-            handleError(e);
-            // Modal stays open
-        } finally {
-            setAssignLoading(false);
-        }
+        // Handled by GrantAccessModal now — kept for compatibility
     };
 
     const handleViewUser = async (user: User) => {
@@ -676,17 +685,99 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                <div className="space-y-6 max-w-6xl mx-auto">
+                {/* Tab Navigation */}
+                <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-xl w-fit">
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Users size={16} /> Users
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('servers')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'servers' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Server size={16} /> Servers & Storage
+                    </button>
+                </div>
+
+                {activeTab === 'servers' ? (
+                    <ServerManager />
+                ) : (
+                <div className="space-y-4 max-w-6xl mx-auto">
                     {/* Action Bar */}
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-lg font-bold text-gray-700">System Users</h2>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-lg font-bold text-gray-700">System Users</h2>
+                            {loading && (
+                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                                    <Loader2 size={14} className="animate-spin text-primary-400" />
+                                    <span>Loading…</span>
+                                </div>
+                            )}
+                            {!loading && users.length > 0 && (
+                                <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                                    {filteredUsers.length}{filteredUsers.length !== users.length ? `/${users.length}` : ''}
+                                </span>
+                            )}
+                        </div>
                         <button 
                             onClick={() => setIsCreateUserOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl shadow-lg shadow-primary-600/20 hover:bg-primary-700 transition-all"
+                            disabled={loading}
+                            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl shadow-lg shadow-primary-600/20 hover:bg-primary-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             <UserPlus size={18} /> New User
                         </button>
                     </div>
+
+                    {/* Search + Filter + Page size bar */}
+                    {!loading && users.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-3">
+                            {/* Search */}
+                            <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 gap-2 flex-1 min-w-[180px] focus-within:ring-2 focus-within:ring-primary-100 focus-within:border-primary-300 transition-all">
+                                <Search size={15} className="text-gray-400 flex-shrink-0" />
+                                <input
+                                    type="text"
+                                    placeholder="Search users…"
+                                    value={searchUser}
+                                    onChange={e => handleSearchUser(e.target.value)}
+                                    className="bg-transparent outline-none text-sm text-gray-700 placeholder-gray-400 w-full"
+                                />
+                                {searchUser && (
+                                    <button onClick={() => handleSearchUser('')} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+                                        <XCircle size={14} />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Role filter */}
+                            <div className="flex bg-gray-100 p-1 rounded-xl gap-0.5">
+                                {(['all', 'admin', 'user'] as const).map(r => (
+                                    <button key={r} onClick={() => handleRoleFilter(r)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize ${
+                                            roleFilter === r ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                        }`}>
+                                        {r === 'all' ? 'All' : r}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Page size */}
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <span className="font-medium">Show</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={e => handlePageSize(Number(e.target.value))}
+                                    className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-primary-300 cursor-pointer"
+                                >
+                                    {[3, 6, 9, 12, 24].map(n => (
+                                        <option key={n} value={n}>{n}</option>
+                                    ))}
+                                </select>
+                                <span className="font-medium">per page</span>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Create User Form */}
                     {isCreateUserOpen && (
@@ -703,21 +794,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         <input type="password" required value={newUserPass} onChange={e => setNewUserPass(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary-500" />
                                     </div>
                                 </div>
-
                                 <div className="flex justify-end gap-2 pt-2">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setIsCreateUserOpen(false)} 
-                                        disabled={createLoading}
-                                        className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg disabled:opacity-50"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button 
-                                        type="submit" 
-                                        disabled={createLoading}
-                                        className="px-6 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 flex items-center gap-2 disabled:opacity-70"
-                                    >
+                                    <button type="button" onClick={() => setIsCreateUserOpen(false)} disabled={createLoading}
+                                        className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg disabled:opacity-50">Cancel</button>
+                                    <button type="submit" disabled={createLoading}
+                                        className="px-6 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 flex items-center gap-2 disabled:opacity-70">
                                         {createLoading && <Loader2 size={16} className="animate-spin" />}
                                         Create Account
                                     </button>
@@ -726,50 +807,151 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         </div>
                     )}
 
-                    {/* Users List */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {users.map(u => (
-                            <div 
-                                key={u._id} 
-                                onClick={() => handleViewUser(u)}
-                                className={`rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all relative group flex flex-col cursor-pointer ${
-                                    u.role === 'admin' 
-                                    ? 'bg-purple-50/40 border-purple-100 hover:border-purple-300 hover:shadow-purple-500/10' 
-                                    : 'bg-white border-gray-100 hover:border-primary-200'
-                                }`}
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-sm ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
-                                            {u.username.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h3 className={`font-bold transition-colors ${u.role === 'admin' ? 'text-gray-900 group-hover:text-purple-700' : 'text-gray-800 group-hover:text-primary-600'}`}>
-                                                {u.username}
-                                            </h3>
-                                            <div className="flex flex-col items-start gap-1">
-                                                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-white text-purple-700 border border-purple-200' : 'bg-gray-100 text-gray-500'}`}>{u.role}</span>
+                    {/* Users Grid */}
+                    {loading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {[...Array(pageSize)].map((_, i) => (
+                                <div key={i} className="rounded-2xl p-5 border border-gray-100 bg-white animate-pulse">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-gray-100" />
+                                            <div className="space-y-2">
+                                                <div className="h-3.5 w-24 bg-gray-100 rounded-full" />
+                                                <div className="h-2.5 w-14 bg-gray-50 rounded-full" />
                                             </div>
                                         </div>
+                                        <div className="flex gap-2">
+                                            <div className="w-8 h-8 bg-gray-50 rounded-lg" />
+                                            <div className="w-8 h-8 bg-gray-50 rounded-lg" />
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2 items-center">
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); setDeleteData({ type: 'user', id: u._id, name: u.username }); }} 
-                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors z-10" 
-                                            title="Delete User"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+                                    <div className="mt-4 pt-3 border-t border-gray-50 flex justify-between">
+                                        <div className="h-2.5 w-32 bg-gray-50 rounded-full" />
                                     </div>
                                 </div>
-                                <div className="mt-4 pt-3 border-t border-gray-50 flex justify-between items-center text-xs text-gray-400">
-                                    <span>ID: {u._id}</span>
-                                    <ExternalLink size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                            ))}
+                        </div>
+                    ) : filteredUsers.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                            <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-4 border border-gray-100">
+                                <Users size={28} className="text-gray-300" />
+                            </div>
+                            {users.length === 0 ? (
+                                <>
+                                    <p className="font-bold text-gray-500">No users yet</p>
+                                    <p className="text-sm text-gray-400 mt-1">Create the first user to get started</p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="font-bold text-gray-500">No users match</p>
+                                    <p className="text-sm text-gray-400 mt-1">Try a different search or filter</p>
+                                    <button onClick={() => { handleSearchUser(''); handleRoleFilter('all'); }}
+                                        className="mt-4 text-xs text-primary-600 hover:text-primary-700 font-medium">
+                                        Clear filters
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    ) : (
+                        <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {pagedUsers.map(u => (
+                                <div 
+                                    key={u._id} 
+                                    onClick={() => handleViewUser(u)}
+                                    className={`rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all relative group flex flex-col cursor-pointer ${
+                                        u.role === 'admin' 
+                                        ? 'bg-purple-50/40 border-purple-100 hover:border-purple-300 hover:shadow-purple-500/10' 
+                                        : 'bg-white border-gray-100 hover:border-primary-200'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-sm ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                                                {u.username.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <h3 className={`font-bold transition-colors ${u.role === 'admin' ? 'text-gray-900 group-hover:text-purple-700' : 'text-gray-800 group-hover:text-primary-600'}`}>
+                                                    {u.username}
+                                                </h3>
+                                                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-white text-purple-700 border border-purple-200' : 'bg-gray-100 text-gray-500'}`}>
+                                                    {u.role}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1 items-center">
+                                            <button onClick={(e) => { e.stopPropagation(); setResetPasswordUser(u); }}
+                                                className="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors" title="Reset Password">
+                                                <KeyRound size={16} />
+                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); setDeleteData({ type: 'user', id: u._id, name: u.username }); }}
+                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete User">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-gray-50 flex justify-between items-center text-xs text-gray-400">
+                                        <span className="font-mono truncate max-w-[160px]">ID: {u._id}</span>
+                                        <ExternalLink size={13} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between pt-2">
+                                <p className="text-xs text-gray-400">
+                                    Showing <span className="font-bold text-gray-600">{(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredUsers.length)}</span> of <span className="font-bold text-gray-600">{filteredUsers.length}</span> users
+                                </p>
+                                <div className="flex items-center gap-1">
+                                    {/* First */}
+                                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1}
+                                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-colors" title="First page">
+                                        <ChevronsLeft size={15} />
+                                    </button>
+                                    {/* Prev */}
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-colors" title="Previous">
+                                        <ChevronLeft size={15} />
+                                    </button>
+
+                                    {/* Page numbers */}
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                        .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                                        .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                                            if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push('...');
+                                            acc.push(p);
+                                            return acc;
+                                        }, [])
+                                        .map((p, i) => p === '...'
+                                            ? <span key={`ellipsis-${i}`} className="px-1 text-gray-400 text-xs">…</span>
+                                            : <button key={p} onClick={() => setCurrentPage(p as number)}
+                                                className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                                                    currentPage === p
+                                                        ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/20'
+                                                        : 'text-gray-500 hover:bg-gray-100'
+                                                }`}>{p}</button>
+                                        )
+                                    }
+
+                                    {/* Next */}
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-colors" title="Next">
+                                        <ChevronRight2 size={15} />
+                                    </button>
+                                    {/* Last */}
+                                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}
+                                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-colors" title="Last page">
+                                        <ChevronsRight size={15} />
+                                    </button>
                                 </div>
                             </div>
-                        ))}
-                    </div>
+                        )}
+                        </>
+                    )}
                 </div>
+                )} {/* end activeTab === 'users' */}
             </div>
 
             {/* User Details Modal (Popup) */}
@@ -778,86 +960,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                 loading={loadingUserDetails}
                 onClose={() => setViewingUser(null)}
                 onAssign={() => { 
-                    if (viewingUser) { 
-                        setAssigningUser(viewingUser); 
-                        // Reset form for new assignment
-                        setAssignPath(''); 
-                        setAssignQuota(''); 
-                    } 
+                    if (viewingUser) setGrantAccessUser(viewingUser);
                 }}
                 onRefresh={refreshViewingUser}
                 storages={storages}
             />
 
-            {/* Assign Modal (Overlay) - Higher Z-index to appear over details if needed */}
-            {assigningUser && (
-                <div className="fixed inset-0 z-[70] bg-[#2B3674]/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 animate-in zoom-in-95 flex flex-col max-h-[90vh]">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="text-xl font-bold text-gray-800">Grant Access</h3>
-                                <p className="text-sm text-gray-500">Assign folder to: <span className="font-bold text-primary-600">{assigningUser.username}</span></p>
-                            </div>
-                            <button onClick={() => setAssigningUser(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        
-                        <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2">
-                            {/* Always Show Folder Picker (No Defined Storage Option) */}
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Select Folder</label>
-                                <FolderPicker onSelect={setAssignPath} />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Storage Limit (Quota)</label>
-                                <div className="relative">
-                                    <PieChart className="absolute left-3 top-3 text-gray-400" size={18} />
-                                    <input 
-                                        type="number" 
-                                        placeholder="e.g. 50 (GB) - Leave empty for Unlimited" 
-                                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500"
-                                        value={assignQuota}
-                                        onChange={e => setAssignQuota(e.target.value)}
-                                    />
-                                    <div className="absolute right-3 top-3 text-xs font-bold text-gray-400">GB</div>
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Permissions</label>
-                                <div className="flex gap-2">
-                                    {['read', 'write', 'delete'].map(perm => (
-                                        <label key={perm} className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 border rounded-xl cursor-pointer transition-all ${assignPerms[perm as keyof Permissions] ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-600/20' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                                            <input 
-                                                type="checkbox" 
-                                                className="hidden" 
-                                                checked={assignPerms[perm as keyof Permissions]}
-                                                onChange={e => setAssignPerms(p => ({...p, [perm]: e.target.checked}))}
-                                            />
-                                            {assignPerms[perm as keyof Permissions] ? <CheckCircle2 size={16} /> : <div className="w-4 h-4 rounded-full border border-gray-300" />}
-                                            <span className="capitalize text-xs font-bold">{perm}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button onClick={() => setAssigningUser(null)} className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold transition-colors">Cancel</button>
-                                <button 
-                                    onClick={handleAssignStorage} 
-                                    disabled={!assignPath || assignLoading} 
-                                    className="flex-1 py-3 bg-primary-600 text-white rounded-xl font-bold shadow-lg shadow-primary-600/20 disabled:opacity-50 hover:bg-primary-700 transition-all flex items-center justify-center gap-2"
-                                >
-                                    {assignLoading && <Loader2 size={16} className="animate-spin" />}
-                                    Confirm Access
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Grant Access Modal — replaces old FolderPicker-based modal */}
+            <GrantAccessModal
+                isOpen={!!grantAccessUser}
+                targetUsername={grantAccessUser?.username || ''}
+                onClose={() => setGrantAccessUser(null)}
+                onSuccess={() => {
+                    setGrantAccessUser(null);
+                    if (viewingUser && grantAccessUser && viewingUser._id === grantAccessUser._id) {
+                        refreshViewingUser();
+                    } else {
+                        loadData();
+                    }
+                }}
+            />
 
             <DeleteConfirmModal 
                 isOpen={!!deleteData} 
@@ -866,6 +988,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                 onClose={() => setDeleteData(null)}
                 onConfirm={confirmDelete}
                 loading={deleteLoading}
+            />
+
+            <ResetPasswordModal
+                user={resetPasswordUser}
+                onClose={() => setResetPasswordUser(null)}
             />
         </div>
     );
