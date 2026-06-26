@@ -84,17 +84,28 @@ router.post('/update', (req, res) => {
     return new Promise((resolve, reject) => {
       send('step', `▶ ${label}`);
 
-      // Always use shell:true with the full command string — never split manually.
-      // This ensures node_modules/.bin is resolved correctly by the shell.
       const child = spawn(shellCmd, [], {
         cwd,
         shell: true,
         env: {
           ...process.env,
-          // Prepend node_modules/.bin of the project root so vite/etc. is found
-          PATH: `${path.join(APP_ROOT, 'node_modules', '.bin')}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
+          // Ensure node_modules/.bin is in PATH for any npm scripts that call binaries
+          PATH: [
+            path.join(APP_ROOT, 'node_modules', '.bin'),
+            path.join(BACKEND_DIR, 'node_modules', '.bin'),
+            process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+          ].join(':'),
+          // Prevent npm from opening interactive prompts
+          CI: 'true',
+          npm_config_yes: 'true',
         },
       });
+
+      // Timeout safety — kill if step takes more than 5 minutes
+      const timeout = setTimeout(() => {
+        child.kill('SIGTERM');
+        reject(new Error(`${label} timed out after 5 minutes`));
+      }, 5 * 60 * 1000);
 
       child.stdout.on('data', d => {
         d.toString().split('\n').filter(l => l.trim()).forEach(l => send('output', l));
@@ -103,10 +114,11 @@ router.post('/update', (req, res) => {
         d.toString().split('\n').filter(l => l.trim()).forEach(l => send('output', l));
       });
       child.on('close', code => {
+        clearTimeout(timeout);
         if (code === 0) { send('done', `✓ ${label}`); resolve(); }
         else reject(new Error(`${label} failed (exit ${code})`));
       });
-      child.on('error', err => reject(err));
+      child.on('error', err => { clearTimeout(timeout); reject(err); });
     });
   };
 
@@ -114,27 +126,36 @@ router.post('/update', (req, res) => {
     try {
       send('start', 'Starting KroomDrive update…');
 
-      // 1. Pull
+      // 1. Pull latest code
       await runStep('Pulling latest changes', 'git pull origin --ff-only');
 
-      // 2. Install deps
+      // 2. Install frontend deps first — vite must exist before build
       await runStep('Installing frontend packages',
-        'npm install --no-audit --no-fund --prefer-offline', APP_ROOT);
-      await runStep('Installing backend packages',
-        'npm install --no-audit --no-fund --prefer-offline', BACKEND_DIR);
+        'npm install --no-audit --no-fund', APP_ROOT);
 
-      // 3. Build frontend
-      // Use node_modules/.bin/vite directly to avoid PATH issues
-      const viteCmd = fs.existsSync(path.join(APP_ROOT, 'node_modules', '.bin', 'vite'))
-        ? `node "${path.join(APP_ROOT, 'node_modules', '.bin', 'vite')}" build`
-        : 'npx --no-install vite build';
+      // 3. Install backend deps
+      await runStep('Installing backend packages',
+        'npm install --no-audit --no-fund', BACKEND_DIR);
+
+      // 4. Build frontend — evaluate vite path AFTER install completes
+      //    so node_modules/.bin/vite is guaranteed to exist
+      const viteBin = path.join(APP_ROOT, 'node_modules', '.bin', 'vite');
+      let viteCmd;
+      if (fs.existsSync(viteBin)) {
+        // Use node to invoke vite directly — 100% reliable regardless of PATH
+        viteCmd = `node "${viteBin}" build`;
+      } else {
+        // Last resort: try npx (will download vite if needed)
+        send('output', '⚠ vite not found in node_modules/.bin, trying npx…');
+        viteCmd = 'npx vite build';
+      }
       await runStep('Building frontend', viteCmd, APP_ROOT);
 
-      // 4. Restart via PM2
+      // 5. Restart via PM2
       try {
         await runStep('Restarting app (PM2)', 'pm2 restart kroomdrive --update-env');
       } catch (_) {
-        send('output', '⚠ PM2 restart skipped — restart manually if needed.');
+        send('output', '⚠ PM2 restart skipped — restart manually: pm2 restart kroomdrive');
       }
 
       send('complete', '✅ KroomDrive updated successfully! Reloading…');
