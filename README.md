@@ -1,402 +1,407 @@
-﻿# KroomDrive
+﻿<div align="center">
 
-**Self-hosted, multi-user file manager with SSH/SFTP access.**  
-Connect any number of remote Linux, macOS, NAS, or FreeBSD servers, manage files through a clean web UI, and give each user access to exactly the folders they need.
+<!-- Logo / Banner -->
+<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/banner.png" alt="KroomDrive Banner" width="100%" />
+
+<br/>
+
+# KroomDrive
+
+**Self-hosted, multi-user SSH file manager**  
+Built with ❤️ by [KroomBox](https://kroombox.com)
+
+<br/>
+
+[![GitHub release](https://img.shields.io/github/v/release/andiahmadnurmadani/kroomdrive?style=flat-square&color=4318FF&label=version)](https://github.com/andiahmadnurmadani/KroomDrive/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4318FF?style=flat-square)](LICENSE)
+[![Node](https://img.shields.io/badge/node-18%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Python](https://img.shields.io/badge/python-3.8%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![KroomBox](https://img.shields.io/badge/by-KroomBox-E1306C?style=flat-square&logo=instagram&logoColor=white)](https://instagram.com/kroombox)
+
+<br/>
+
+[🌐 Website](https://kroombox.com) &nbsp;·&nbsp;
+[📸 Instagram](https://instagram.com/kroombox) &nbsp;·&nbsp;
+[🐛 Issues](https://github.com/andiahmadnurmadani/KroomDrive/issues) &nbsp;·&nbsp;
+[⭐ Star this repo](https://github.com/andiahmadnurmadani/KroomDrive)
+
+</div>
 
 ---
 
-## Quick Install
+## ✨ What is KroomDrive?
 
-> **Requires:** Python 3.8+ and Node.js 18+
+KroomDrive is a **self-hosted file manager** that lets you browse, upload, and manage files on any remote Linux/macOS/NAS server — directly from your browser. No cloud. No subscription. Your data stays on your own servers.
 
-### Linux / macOS
+<div align="center">
+<br/>
+
+<!-- Main Screenshot -->
+<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/screenshot-main.png" alt="KroomDrive Dashboard" width="90%" style="border-radius:12px" />
+
+<br/><br/>
+
+</div>
+
+## 🚀 Features
+
+<table>
+<tr>
+<td width="50%">
+
+**📁 File Management**
+- Browse, upload, download files via SSH/SFTP
+- Copy, move, rename, delete with trash support
+- Real-time progress for bulk operations
+- Archive extraction (zip, tar)
+
+**👥 Multi-User**
+- Role-based access control (admin / user)
+- Per-user folder permissions (Read / Write / Delete)
+- Storage quota enforcement
+- User-scoped real-time events (WebSocket)
+
+**🔀 Git Integration**
+- Floating panel with pull / push / fetch
+- Commit, branch switch, diff viewer
+- Private repo support (PAT tokens)
+- Auto-detect `.git` repositories
+
+</td>
+<td width="50%">
+
+**🖥 Multi-Server**
+- Connect unlimited remote servers
+- Direct SSH or **Cloudflare Tunnel**
+- Auto-detects OS (Linux, macOS, Synology, QNAP, TrueNAS)
+
+**🎨 Modern UI**
+- Clean dashboard design
+- Collapsible sidebar
+- Draggable, resizable Git panel
+- Grid & list view modes
+
+**🔒 Secure**
+- JWT authentication
+- Per-user session isolation
+- All data on your own infrastructure
+- No third-party cloud involved
+
+</td>
+</tr>
+</table>
+
+<div align="center">
+<br/>
+
+<!-- Grid Screenshots -->
+<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/screenshot-admin.png" alt="Admin Console" width="45%" style="border-radius:10px; margin:6px" />
+&nbsp;
+<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/screenshot-git.png" alt="Git Panel" width="45%" style="border-radius:10px; margin:6px" />
+
+<sub>Admin Console · Git Integration Panel</sub>
+
+<br/><br/>
+
+</div>
+
+---
+
+## ⚡ Quick Install
+
+> **Prerequisites:** Python 3.8+ &nbsp;·&nbsp; Node.js 18+
+
+<table>
+<tr>
+<th>Platform</th>
+<th>Command</th>
+</tr>
+<tr>
+<td><b>Linux / macOS</b></td>
+<td>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/andiahmadnurmadani/kroomdrive/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/scripts/install.sh | bash
 ```
 
-or with `wget`:
+</td>
+</tr>
+<tr>
+<td><b>Linux / macOS</b><br/><sub>(wget)</sub></td>
+<td>
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/andiahmadnurmadani/kroomdrive/main/scripts/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/scripts/install.sh | bash
 ```
 
-### Windows (PowerShell)
+</td>
+</tr>
+<tr>
+<td><b>Windows</b><br/><sub>(PowerShell)</sub></td>
+<td>
 
 ```powershell
-irm https://raw.githubusercontent.com/andiahmadnurmadani/kroomdrive/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/scripts/install.ps1 | iex
 ```
 
-### Clone manually then install
+</td>
+</tr>
+<tr>
+<td><b>Manual</b></td>
+<td>
 
 ```bash
-git clone https://github.com/andiahmadnurmadani/kroomdrive
-cd kroomdrive
+git clone https://github.com/andiahmadnurmadani/KroomDrive
+cd KroomDrive
 python3 install.py
 ```
 
-The installer handles everything — detects dependencies, installs npm packages, configures environment, sets up PM2.
+</td>
+</tr>
+</table>
+
+The installer will:
+1. 🔍 Detect Node.js, npm, git, PM2, cloudflared
+2. 🔌 Auto-find available ports
+3. 🔐 Generate a secure JWT secret
+4. 📦 Install all npm packages
+5. ⚙️ Write your `.env` configuration
+6. 🚀 Set up **PM2** for auto-restart on crash/reboot
 
 ---
 
-## After install — starting KroomDrive
+## 🎬 Getting Started
 
-```bash
-./start.sh          # start (PM2 mode)
-./stop.sh           # stop
-./restart.sh        # restart
-pm2 logs            # view logs
-pm2 status          # view process status
+After installation, open your browser:
+
+```
+http://localhost:4343
 ```
 
-Then open `http://localhost:4343` (or the port you chose during install).
+Log in with the admin credentials you set during install, then:
 
----
-
-## Features
-
-- 🗂 **File management** — Browse, upload, download, copy, move, rename, delete via SSH/SFTP
-- 👥 **Multi-user** — Role-based access control; admin assigns per-user folder permissions (Read / Write / Delete) and storage quotas
-- 🖥 **Multi-server** — Connect unlimited servers via direct SSH or **Cloudflare Tunnel**
-- 🔀 **Git integration** — Floating panel with pull/push/fetch, commit, branch switch, diff viewer, private repo token support
-- 🗑 **Trash / recycle bin** — Move to trash with restore; never lose files accidentally
-- 📊 **Real-time progress** — Delete and extract operations show live progress via WebSocket
-- 🌐 **OS auto-detection** — Adapts disk commands for Linux, macOS, Synology DSM, QNAP, TrueNAS, OpenWrt
-- 🔒 **Private** — All data stays on your own infrastructure; no third-party cloud
-
----
-
-## Requirements
-
-| Requirement | Version | Notes |
+| Step | Where | What to do |
 |---|---|---|
-| **Python** | 3.8+ | For the installer only |
-| **Node.js** | 18+ | Runtime for both frontend and backend |
-| **npm** | 8+ | Included with Node.js |
-| **cloudflared** | Any | Optional — only for Cloudflare Tunnel connections |
+| 1 | Admin Console → Servers & Storage | Add your first SSH server |
+| 2 | Click **Test Connection** | Verify connectivity & detect OS |
+| 3 | Define a **Storage** | Name a path on the server |
+| 4 | Admin Console → Users | Create user accounts |
+| 5 | Click a user → **Assign Storage** | Set folder + R/W/D permissions |
+
+Users log in and see **only** their assigned folders.
 
 ---
 
-## Installation
-
-### One command
+## 🛠 Managing KroomDrive
 
 ```bash
-python3 install.py
-```
+./start.sh          # Start via PM2
+./stop.sh           # Stop
+./restart.sh        # Restart
 
-The installer detects all dependencies automatically and guides you through configuration.
-
-#### What it detects
-
-| Dependency | Required | Notes |
-|---|---|---|
-| Node.js 18+ | ✅ Yes | https://nodejs.org |
-| npm | ✅ Yes | Bundled with Node.js |
-| git | No | For git integration features |
-| PM2 | No | Offered for install if missing |
-| cloudflared | No | For Cloudflare Tunnel connections |
-| nginx | No | For production reverse proxy |
-
-#### What the installer does
-
-1. **Scans** your system for all dependencies, shows a status table
-2. **Offers to install PM2** globally if not found
-3. **Auto-detects free ports** (defaults: 4343 frontend, 4344 backend)
-4. **Asks 4 questions** — ports, run mode, admin credentials, CORS
-5. **Generates** a random 128-char JWT secret
-6. **Installs** all npm packages (frontend + backend)
-7. **Writes** `.env` files with your configuration
-8. **Creates** launch scripts and PM2 ecosystem config
-9. **Optionally starts** KroomDrive immediately via PM2
-10. **Offers** to register PM2 for auto-start on system reboot
-
-#### Run modes
-
-| Mode | Command | Best for |
-|---|---|---|
-| **PM2** (recommended) | `./start.sh` | Production, VPS, always-on |
-| **Dev** | `./start-dev.sh` | Local development |
-
----
-
-## Starting KroomDrive
-
-### After installation (PM2 mode)
-
-```bash
-./start.sh          # start
-./stop.sh           # stop
-./restart.sh        # restart
-
-pm2 status          # view process status
-pm2 logs            # stream all logs
-pm2 logs kroomdrive-backend    # backend logs only
-pm2 logs kroomdrive-frontend   # frontend logs only
-```
-
-### After installation (dev mode)
-
-```bash
-./start-dev.sh      # Linux/macOS
-start-dev.bat       # Windows
-```
-
-### npm shortcuts (after install)
-
-```bash
-npm run start       # pm2 start
-npm run stop        # pm2 stop
-npm run restart     # pm2 restart
-npm run logs        # pm2 logs
-npm run status      # pm2 status
+pm2 status          # View process status
+pm2 logs            # Stream all logs
+pm2 logs kroomdrive-backend    # Backend logs only
 ```
 
 ---
 
-## First steps after login
+## 📁 Project Structure
 
 ```
-Admin Console → Servers & Storage
-```
-1. **Add SSH Server** — enter hostname/IP, SSH username, password or private key  
-   (or use Cloudflare Tunnel by selecting the Cloudflare option)
-2. Click **Test Connection** to verify — OS is auto-detected
-3. Define a **Storage** — give it a name and point it to a path on the server
-
-```
-Admin Console → Users
-```
-4. **Create users** — set username and password
-5. Click a user → **Assign Storage** — choose the folder and set permissions (R/W/D) and optional quota
-
-Users can now log in and see only their assigned folders.
-
----
-
-## Project structure
-
-```
-kroomdrive/
-├── install.py           ← Installer (run this first)
-├── start.sh / start.bat ← Launch scripts (created by installer)
-├── .env                 ← Frontend config (created by installer, gitignored)
-├── .env.example         ← Template for manual setup
+KroomDrive/
+├── install.py              ← Interactive installer
+├── scripts/
+│   ├── install.sh          ← One-liner for Linux/macOS
+│   └── install.ps1         ← One-liner for Windows
 │
-├── src/                 ← React frontend (TypeScript + Vite + Tailwind)
+├── src/                    ← React frontend (TypeScript + Vite + Tailwind)
 │   ├── components/
 │   ├── contexts/
 │   └── services/
 │
 └── backend/
-    ├── .env             ← Backend secrets (created by installer, gitignored)
-    ├── .env.example     ← Template for manual setup
     ├── data/
-    │   ├── kroomdrive.db    ← SQLite database
-    │   └── uploads/         ← Temporary upload staging
+    │   └── kroomdrive.db   ← SQLite database
     └── src/
-        ├── index.js         ← Express server + Socket.IO
-        ├── db.js            ← SQLite schema + migrations
-        ├── ssh.js           ← SSH/SFTP connection pool
-        ├── osdetect.js      ← OS detection + command adapters
+        ├── index.js        ← Express + Socket.IO
+        ├── db.js           ← Schema + migrations
+        ├── ssh.js          ← SSH/SFTP connection pool
+        ├── osdetect.js     ← OS detection + adapters
         └── routes/
             ├── auth.js
             ├── users.js
             ├── servers.js
-            ├── storages.js
             ├── files.js
             └── git.js
 ```
 
 ---
 
-## Manual setup (without the installer)
+## ⚙️ Configuration
 
-If you prefer to configure manually:
-
-```bash
-# 1. Install dependencies
-npm install
-cd backend && npm install && cd ..
-
-# 2. Configure frontend
-cp .env.example .env
-# Edit .env if needed
-
-# 3. Configure backend
-cp backend/.env.example backend/.env
-# Edit backend/.env — at minimum change JWT_SECRET and ADMIN_PASSWORD
-
-# 4. Create data directories
-mkdir -p backend/data/uploads
-
-# 5. Start (two terminals)
-cd backend && npm run dev   # terminal 1
-npm run dev                 # terminal 2
-```
-
----
-
-## Environment variables
-
-### Frontend (`.env`)
+### Frontend `.env`
 
 | Variable | Default | Description |
 |---|---|---|
 | `VITE_PORT` | `4343` | Dev server port |
-| `VITE_BACKEND_URL` | `http://localhost:4344` | Backend URL for Vite proxy |
+| `VITE_BACKEND_URL` | `http://localhost:4344` | Backend URL |
 
-### Backend (`backend/.env`)
+### Backend `backend/.env`
 
-| Variable | Default | Required | Description |
-|---|---|---|---|
-| `PORT` | `4344` | — | Backend server port |
-| `JWT_SECRET` | — | **Yes** | Random secret for signing tokens. Generate: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` |
-| `JWT_EXPIRES_IN` | `24h` | — | Token expiry (e.g. `8h`, `7d`) |
-| `DB_PATH` | `./data/kroomdrive.db` | — | SQLite database path |
-| `UPLOAD_TEMP_DIR` | `./data/uploads` | — | Temp dir for file uploads |
-| `CORS_ORIGIN` | `*` | — | Allowed origins. Use your domain in production: `https://yourdomain.com` |
-| `ADMIN_USERNAME` | `admin` | — | First admin username (first run only) |
-| `ADMIN_PASSWORD` | — | **Yes** | First admin password (first run only, min 8 chars) |
+| Variable | Required | Description |
+|---|---|---|
+| `PORT` | — | Backend port (default `4344`) |
+| `JWT_SECRET` | ✅ | Random secret — auto-generated by installer |
+| `JWT_EXPIRES_IN` | — | Token expiry (default `24h`) |
+| `DB_PATH` | — | SQLite path (default `./data/kroomdrive.db`) |
+| `CORS_ORIGIN` | — | Allowed origins (default `*`) |
+| `ADMIN_USERNAME` | — | First admin username (first run only) |
+| `ADMIN_PASSWORD` | ✅ | First admin password (first run only) |
 
 ---
 
-## Production deployment
+## 🔒 Security
 
-### Build frontend
+- **JWT** signed with a randomly-generated secret (never hardcoded)
+- **Per-user isolation** — users can only access their assigned paths
+- **User-scoped WebSocket rooms** — progress events never leak between users
+- **No cloud** — everything runs on your own servers
+- **`.env` files are gitignored** — credentials never committed
 
-```bash
-npm run build
-# Output in dist/ — serve as static files
+For production, set:
+```env
+CORS_ORIGIN=https://yourdomain.com
+JWT_EXPIRES_IN=8h
 ```
 
-### nginx config example
+---
+
+## 🚀 Production Deployment
+
+```bash
+# Build frontend
+npm run build
+
+# Run backend with PM2 (already set up by installer)
+pm2 start ecosystem.config.json
+pm2 save
+pm2 startup   # auto-start on reboot
+```
+
+**nginx config:**
 
 ```nginx
 server {
     listen 80;
     server_name yourdomain.com;
 
-    # Frontend static files
-    root /path/to/kroomdrive/dist;
+    root /path/to/KroomDrive/dist;
     index index.html;
 
-    # SPA fallback
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
+    location / { try_files $uri $uri/ /index.html; }
 
-    # Proxy API to backend
     location /api {
         proxy_pass http://127.0.0.1:4344;
-        proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # WebSocket for real-time progress
     location /socket.io {
         proxy_pass http://127.0.0.1:4344;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
     }
 }
 ```
 
-### Run backend as a service (systemd)
-
-```ini
-# /etc/systemd/system/kroomdrive.service
-[Unit]
-Description=KroomDrive Backend
-After=network.target
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/path/to/kroomdrive/backend
-ExecStart=/usr/bin/node src/index.js
-Restart=on-failure
-EnvironmentFile=/path/to/kroomdrive/backend/.env
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now kroomdrive
-```
-
 ---
 
-## Updating
+## 🔧 Troubleshooting
+
+<details>
+<summary><b>Port already in use</b></summary>
 
 ```bash
-git pull
-npm install
-cd backend && npm install && cd ..
-# Restart the servers — database migrations run automatically on start
+# Linux/macOS — find what's using the port
+lsof -i :4343
+# Windows
+netstat -ano | findstr 4343
 ```
 
----
-
-## Security notes
-
-- **`JWT_SECRET`** must be a long random string in production. The installer generates one automatically.
-- **`ADMIN_PASSWORD`** is only used on the very first run to seed the database. Change it via Admin Console after setup.
-- **`CORS_ORIGIN`** should be set to your actual domain (`https://yourdomain.com`) in production, not `*`.
-- SSH credentials and Git tokens are stored in the local SQLite database — keep `backend/data/` protected.
-- Use **Personal Access Tokens** (not account passwords) for Git operations. Scope them to read/write only the repos you need.
-- The `.env` files are gitignored and should **never** be committed.
-
----
-
-## Troubleshooting
-
-**Port already in use**
-```bash
-# Find what's using the port
-lsof -i :4343   # macOS/Linux
-netstat -ano | findstr 4343   # Windows
-```
 Re-run `python3 install.py` and choose different ports.
 
-**`cloudflared` not found**
-```
+</details>
+
+<details>
+<summary><b>cloudflared not found</b></summary>
+
+```bash
 # macOS
 brew install cloudflared
 
 # Linux
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
-chmod +x /usr/local/bin/cloudflared
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+  -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared
 
 # Windows
 winget install Cloudflare.cloudflared
 ```
 
-**Database locked / corrupted**
-```bash
-# Stop all servers, then
-rm backend/data/kroomdrive.db
-# Restart — database is recreated automatically
-```
+</details>
 
-**Forgot admin password**
+<details>
+<summary><b>Forgot admin password</b></summary>
+
 ```bash
-# Run this in the backend directory
+cd backend
 node -e "
 const db = require('better-sqlite3')('./data/kroomdrive.db');
 const bcrypt = require('bcryptjs');
-db.prepare(\"UPDATE users SET password=? WHERE role='admin'\").run(bcrypt.hashSync('newpassword123', 10));
+db.prepare(\"UPDATE users SET password=? WHERE role='admin'\")
+  .run(bcrypt.hashSync('newpassword123', 10));
 console.log('Password reset to: newpassword123');
 "
 ```
 
+</details>
+
+<details>
+<summary><b>Update to latest version</b></summary>
+
+```bash
+git pull
+npm install && cd backend && npm install && cd ..
+pm2 restart all
+```
+
+</details>
+
 ---
 
-## License
+## 📄 License
 
 MIT — free to use, modify, and distribute.
+
+---
+
+<div align="center">
+
+<br/>
+
+Made with ❤️ by
+
+<a href="https://kroombox.com">
+  <img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/kroombox-logo.png" alt="KroomBox" height="40" />
+</a>
+
+<br/><br/>
+
+[![Website](https://img.shields.io/badge/kroombox.com-4318FF?style=for-the-badge&logo=google-chrome&logoColor=white)](https://kroombox.com)
+[![Instagram](https://img.shields.io/badge/@kroombox-E1306C?style=for-the-badge&logo=instagram&logoColor=white)](https://instagram.com/kroombox)
+
+<br/>
+
+<sub>© 2025 KroomBox · All rights reserved</sub>
+
+</div>
