@@ -168,13 +168,14 @@ async function gitExecAuth(serverId, remotePath, gitArgs) {
   // Strategy:
   // 1. Save original remote URL
   // 2. Set credentialed URL (no log of the URL itself for security)
-  // 3. Run the git operation
+  // 3. Run the git operation with credential.helper="" to PREVENT git from
+  //    trying to save creds to keychain/store (macOS Keychain returns -25308 error)
   // 4. ALWAYS restore original URL (even if op failed)
   // 5. Exit with the op's exit code
   const cmd = [
     `cd -- "${remotePath}"`,
     `&& git remote set-url origin ${credUrlQ}`,
-    `&& { GIT_TERMINAL_PROMPT=0 git ${safeArgs} 2>&1; _EC=$?; }`,
+    `&& { GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c credential.helper='' ${safeArgs} 2>&1; _EC=$?; }`,
     `; git remote set-url origin ${origUrlQ} 2>/dev/null`,
     `; exit \${_EC:-1}`,
   ].join(' ');
@@ -700,8 +701,9 @@ router.post('/credentials/test', async (req, res) => {
     if (!credUrl) return res.status(400).json({ error: 'Failed to build credentialed URL' });
 
     // Test with git ls-remote — quick, doesn't change anything
+    // Disable credential.helper to prevent macOS Keychain "failed to store" warnings
     const sqEscape = (s) => `'${s.replace(/'/g, "'\\''")}'`;
-    const testCmd = `GIT_TERMINAL_PROMPT=0 git ls-remote --heads ${sqEscape(credUrl)} 2>&1`;
+    const testCmd = `GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c credential.helper='' ls-remote --heads ${sqEscape(credUrl)} 2>&1`;
 
     const output = await execCommand(serverId, testCmd);
     const lower = output.toLowerCase();

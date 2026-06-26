@@ -152,23 +152,26 @@ function getSystemGitCred() {
 
 // ─── Helper: build git command with inline URL credentials ───────────────────
 function buildGitCmdWithCreds(gitArgs, remoteUrl, httpsUrl, cred) {
+  // Always disable credential.helper to prevent macOS Keychain warnings
+  // (-25308 errSecInteractionNotAllowed when running in non-interactive context)
+  const noHelper = `-c credential.helper= -c credential.helper=''`;
+
   if (!cred || !cred.token || !httpsUrl) {
-    return `GIT_TERMINAL_PROMPT=0 git ${gitArgs}`;
+    return `GIT_TERMINAL_PROMPT=0 git ${noHelper} ${gitArgs}`;
   }
   const credUrl = buildCredUrl(httpsUrl, cred.username, cred.token);
   if (!credUrl) {
-    return `GIT_TERMINAL_PROMPT=0 git ${gitArgs}`;
+    return `GIT_TERMINAL_PROMPT=0 git ${noHelper} ${gitArgs}`;
   }
-  // Escape double quotes in URL for shell safety
-  const escapedCredUrl = credUrl.replace(/"/g, '\\"');
-  const escapedOrig    = remoteUrl.replace(/"/g, '\\"');
+  // Use single-quoted strings to prevent shell interpretation
+  const sqEscape = (s) => `'${s.replace(/'/g, "'\\''")}'`;
 
-  // Set credentialed URL, run, restore original
+  // Set credentialed URL, run with no credential helper, restore original
   return [
-    `git remote set-url origin "${escapedCredUrl}"`,
-    `&& GIT_TERMINAL_PROMPT=0 git ${gitArgs} 2>&1; _EC=$?`,
-    `; git remote set-url origin "${escapedOrig}"`,
-    `; exit $_EC`,
+    `git remote set-url origin ${sqEscape(credUrl)}`,
+    `&& { GIT_TERMINAL_PROMPT=0 git ${noHelper} ${gitArgs} 2>&1; _EC=$?; }`,
+    `; git remote set-url origin ${sqEscape(remoteUrl)} 2>/dev/null`,
+    `; exit \${_EC:-1}`,
   ].join(' ');
 }
 
