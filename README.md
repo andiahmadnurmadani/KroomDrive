@@ -1,7 +1,6 @@
 ﻿<div align="center">
 
-<!-- Banner -->
-<img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/banner.png" alt="KroomDrive" width="100%" />
+![KroomDrive](https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/banner.png)
 
 <br/><br/>
 
@@ -379,7 +378,9 @@ MIT — free to use, modify, and distribute.
 Made with ❤️ by
 
 <a href="https://kroombox.com">
-  <img src="https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/logo.png" alt="KroomDrive Logo" height="48" />
+
+![KroomDrive Logo](https://raw.githubusercontent.com/andiahmadnurmadani/KroomDrive/main/public/logo.png)
+
 </a>
 
 <br/><br/>
